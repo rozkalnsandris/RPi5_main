@@ -491,5 +491,228 @@ class VerifiedDefinitionComparisonTests(unittest.TestCase):
             self.assertNotIn(forbidden, source)
 
 
+# Independent forward-only validator (#1513): synthetic bindings only.
+# No Hermes store access; the original preflight and operator are unchanged.
+INDEPENDENT = ROOT / "ops/lib/balcony_autumn_independent_validator.py"
+independent_loader = importlib.machinery.SourceFileLoader(
+    "balcony_independent_1513", str(INDEPENDENT)
+)
+independent_spec = importlib.util.spec_from_loader(
+    independent_loader.name, independent_loader
+)
+assert independent_spec is not None
+independent = importlib.util.module_from_spec(independent_spec)
+independent_loader.exec_module(independent)
+
+
+class IndependentCurrentJobContractTests(unittest.TestCase):
+    def setUp(self):
+        self.jobs = [
+            job("legacy-seven", "0 7 * * *", "synthetic-old-a",
+                deliver="telegram"),
+            job("legacy-fourteen", "0 14 * * *", "synthetic-heat",
+                deliver="telegram"),
+            job("legacy-twenty-three", "0 23 * * *", "synthetic-old-b",
+                deliver="telegram"),
+            job("autumn-eleven", "0 11 * * *", "synthetic-reviewed-wrapper",
+                enabled=True, deliver="local"),
+            job("other-task", "0 10 * * *", "unrelated-task"),
+        ]
+        self.jobs[3]["timezone"] = "Europe/Berlin"
+        self.jobs[3]["grace_minutes"] = 15
+        self.bindings = {}
+        for slot, item in zip(independent.SLOTS, self.jobs):
+            self.bindings[slot] = {
+                "name": item["name"],
+                "script_sha256": hashlib.sha256(
+                    item["script"].encode("utf-8")
+                ).hexdigest(),
+                "prompt_sha256": hashlib.sha256(
+                    item["prompt"].encode("utf-8")
+                ).hexdigest(),
+                "deliver": item["deliver"],
+                "timezone": item.get("timezone"),
+                "grace_minutes": item.get("grace_minutes"),
+            }
+
+    def assess(self):
+        return independent.assess_jobs(self.jobs, bindings=self.bindings)
+
+    def assert_blocked_private(self, result, reason, *, matched=False):
+        self.assertEqual(result["result"], "BLOCKED")
+        self.assertEqual(result["reason"], reason)
+        self.assertIs(result["in_memory_contract_match"], matched)
+        self.assertFalse(result["source_contract_independently_approved"])
+        self.assertFalse(result["host_source_provenance_verified"])
+        self.assertFalse(result["sensor_runtime_verified"])
+        self.assertFalse(result["telegram_delivery_verified"])
+        self.assertFalse(result["live_apply_authorized"])
+        self.assertFalse(result["writes_performed"])
+        self.assertFalse(result["mutation_started"])
+        self.assertFalse(result["raw_payload_emitted"])
+        rendered = json.dumps(result, sort_keys=True)
+        self.assertLess(len(rendered), 1200)
+        for private in (
+            "synthetic-reviewed-wrapper", "legacy-seven",
+            "Europe/Berlin", self.bindings["autumn_1100"]["script_sha256"],
+            "private-synthetic-token", "SECRET_SYNTHETIC",
+        ):
+            self.assertNotIn(private, rendered)
+
+    def test_no_production_contract_stays_blocked(self):
+        self.assertIsNone(independent.PRODUCTION_BINDINGS)
+        report = independent.assess_jobs(self.jobs)
+        self.assert_blocked_private(report, "independent_source_contract_missing")
+
+    def test_synthetic_exact_contract_match_is_still_blocked(self):
+        self.assert_blocked_private(
+            self.assess(), "in_memory_contract_match_not_authorized",
+            matched=True,
+        )
+
+    def test_missing_or_malformed_expected_bindings_refused(self):
+        self.bindings.pop("legacy_0700")
+        self.assert_blocked_private(
+            self.assess(), "independent_source_contract_invalid"
+        )
+        self.bindings["legacy_0700"] = dict(self.bindings["legacy_1400"])
+        self.assert_blocked_private(
+            self.assess(), "independent_source_contract_invalid"
+        )
+        self.bindings["legacy_0700"]["name"] = "legacy-seven"
+        self.bindings["legacy_0700"]["script_sha256"] = "not-a-digest"
+        self.assert_blocked_private(
+            self.assess(), "independent_source_contract_invalid"
+        )
+
+    def test_any_watering_binding_change_stays_blocked(self):
+        for field in ("script", "prompt"):
+            with self.subTest(field=field):
+                self.jobs[3][field] = "SECRET_SYNTHETIC_CHANGED"
+                self.assert_blocked_private(
+                    self.assess(), "script_or_prompt_binding_mismatch"
+                )
+                self.jobs[3][field] = (
+                    "synthetic-reviewed-wrapper" if field == "script" else ""
+                )
+        self.jobs[0]["script"] = "synthetic-different-legacy-command"
+        self.assert_blocked_private(
+            self.assess(), "script_or_prompt_binding_mismatch"
+        )
+
+    def test_wrong_legacy_enabled_and_11h_delivery_refused(self):
+        self.jobs[0]["enabled"] = True
+        self.assert_blocked_private(self.assess(), "enabled_status_mismatch")
+        self.jobs[0]["enabled"] = False
+        self.jobs[3]["deliver"] = "telegram"
+        self.assert_blocked_private(self.assess(), "delivery_contract_mismatch")
+
+    def test_wrong_schedule_and_time_contract_refused(self):
+        self.jobs[3]["schedule"]["expr"] = "0 10 * * *"
+        self.assert_blocked_private(self.assess(), "schedule_contract_mismatch")
+        self.jobs[3]["schedule"]["expr"] = "0 11 * * *"
+        self.jobs[3]["schedule"]["extra"] = "SECRET_SYNTHETIC"
+        self.assert_blocked_private(self.assess(), "schedule_contract_mismatch")
+        self.jobs[3]["schedule"].pop("extra")
+        self.jobs[3]["timezone"] = "UTC"
+        self.assert_blocked_private(self.assess(), "time_contract_mismatch")
+        self.jobs[3]["timezone"] = "Europe/Berlin"
+        self.jobs[3]["grace_minutes"] = 16
+        self.assert_blocked_private(self.assess(), "time_contract_mismatch")
+
+    def test_unknown_or_active_scheduler_state_refused(self):
+        for state in ("running", "paused", "completed", "unknown", None):
+            with self.subTest(state=state):
+                self.jobs[3]["state"] = state
+                self.assert_blocked_private(
+                    self.assess(), "scheduler_state_unreviewed"
+                )
+        self.jobs[3]["state"] = "scheduled"
+        self.assert_blocked_private(
+            self.assess(), "in_memory_contract_match_not_authorized",
+            matched=True,
+        )
+
+    def test_bookkeeping_is_bounded_and_pending_slot_never_ignored(self):
+        self.jobs[3]["run_count"] = 8
+        self.jobs[3]["next_run_at"] = "synthetic-time"
+        self.jobs[3]["last_dispatch"] = {
+            "kind": "on_time", "at": "synthetic-time"
+        }
+        self.assert_blocked_private(
+            self.assess(), "in_memory_contract_match_not_authorized",
+            matched=True,
+        )
+        self.jobs[3]["run_count"] = True
+        self.assert_blocked_private(
+            self.assess(), "scheduler_metadata_unreviewed"
+        )
+        self.jobs[3]["run_count"] = 8
+        self.jobs[3]["pending_slot"] = {"at": "soon", "by": "scheduler"}
+        self.assert_blocked_private(
+            self.assess(), "scheduler_metadata_unreviewed"
+        )
+        self.jobs[3].pop("pending_slot")
+        self.jobs[3]["last_dispatch"]["unexpected"] = "PRIVATE"
+        self.assert_blocked_private(
+            self.assess(), "scheduler_metadata_unreviewed"
+        )
+
+    def test_duplicate_missing_and_unexpected_watering_candidate(self):
+        self.jobs.append(dict(self.jobs[3], id="distinct-id"))
+        self.assert_blocked_private(
+            self.assess(), "required_slot_missing_or_duplicate"
+        )
+        self.jobs.pop()
+        self.jobs[3]["id"] = self.jobs[0]["id"]
+        self.assert_blocked_private(self.assess(), "duplicate_job_identity")
+        self.jobs[3]["id"] = "autumn-eleven"
+        self.jobs[3]["name"] = "missing"
+        self.assert_blocked_private(
+            self.assess(), "required_slot_missing_or_duplicate"
+        )
+        self.jobs[3]["name"] = "autumn-eleven"
+        self.jobs.append(job("unexpected-job", "0 12 * * *",
+                             "balcony-watering-autumn"))
+        self.assert_blocked_private(
+            self.assess(), "unexpected_watering_candidate"
+        )
+
+    def test_injection_unknown_fields_unbounded_and_malformed_rejected(self):
+        self.jobs[3]["SECRET_SYNTHETIC_UNREVIEWED_KEY"] = "private-synthetic-token"
+        self.assert_blocked_private(
+            self.assess(), "unreviewed_definition_field"
+        )
+        self.jobs[3].pop("SECRET_SYNTHETIC_UNREVIEWED_KEY")
+        self.jobs[3]["repeat"] = {"times": 2, "completed": 1}
+        self.assert_blocked_private(
+            self.assess(), "unreviewed_definition_field"
+        )
+        self.jobs[3].pop("repeat")
+        self.jobs[3]["script"] = "SECRET_SYNTHETIC" * 10_000
+        self.assert_blocked_private(
+            self.assess(), "unreviewed_job_collection"
+        )
+        self.jobs[3]["script"] = "synthetic-reviewed-wrapper"
+        self.jobs[3]["prompt"] = float("nan")
+        self.assert_blocked_private(
+            self.assess(), "unreviewed_job_collection"
+        )
+        self.jobs[3]["prompt"] = ""
+        report = independent.assess_jobs([], bindings=self.bindings)
+        self.assert_blocked_private(report, "unreviewed_job_collection")
+
+    def test_module_no_host_file_cli_network_or_controller_side_effect(self):
+        source = INDEPENDENT.read_text(encoding="utf-8")
+        for forbidden in ("subprocess", "urllib.", "socket.",
+                          "os.system", "pathlib", "read_bytes(",
+                          "write_text(", "open(", "if __name__",
+                          "controller.apply", "mqtt.publish", "requests."):
+            self.assertNotIn(forbidden, source)
+        self.assertNotIn("import os", source)
+        self.assertNotIn("JOB_SHA256 =", source)
+        self.assertNotIn("c3609b09eb842f73d8fc78e8828fd350838be9f7453adfcfd6855c56d09c1140",
+                         source)
+
 if __name__ == "__main__":
     unittest.main()
