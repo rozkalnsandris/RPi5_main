@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import importlib.machinery
 import importlib.util
 import json
 import os
+import sys
+from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest import mock
@@ -85,12 +89,12 @@ class RepairTests(unittest.TestCase):
         self.store.write_text(json.dumps({"jobs": self.jobs, "updated_at": "synthetic"}))
         self.store.chmod(0o600)
 
-    def inspect(self, *, diagnostics=None):
+    def inspect(self, *, diagnostics=None, strict_blockers=None):
         return m.inspect(
             store=self.store, home=self.home,
             source=self.source, bot=self.bot,
             expected_uid=os.geteuid(), diagnostic_categories=diagnostics,
-            **self.hashes,
+            strict_blockers=strict_blockers, **self.hashes,
         )
 
     def block(self, needle):
@@ -427,6 +431,110 @@ class RepairTests(unittest.TestCase):
             else:
                 self.jobs[3].pop(field, None)
             self.save_store()
+
+    def test_strict_identity_blocker_categorizes_without_private_values(self):
+        self.enable_strict_script_only()
+        # Each synthetic mismatch must still block before wrapper/controller
+        # reads. Diagnostics are fixed enums, never arbitrary input values.
+        mutations = (
+            ("no_agent", False, "no_agent_not_enabled"),
+            ("prompt", "PRIVATE_SYNTHETIC_PROMPT", "prompt_not_empty"),
+            ("state", "paused", "scheduler_state_unreviewed"),
+            ("timezone", "PRIVATE_SYNTHETIC_TZ", "timezone_unreviewed"),
+            ("grace_minutes", 30, "grace_unreviewed"),
+            ("schedule", {"kind": "cron", "expr": "0 11 * * *",
+                          "display": "PRIVATE_SYNTHETIC"}, "schedule_unreviewed"),
+            ("pending_slot", {"at": "PRIVATE_SYNTHETIC"}, "pending_dispatch_unreviewed"),
+            ("fire_claim", {"at": "PRIVATE_SYNTHETIC"}, "pending_dispatch_unreviewed"),
+            ("model", "PRIVATE_SYNTHETIC", "agent_bindings_unreviewed"),
+            ("skills", ["PRIVATE_SYNTHETIC"], "agent_bindings_unreviewed"),
+            ("run_count", True, "counter_unreviewed"),
+            ("repeat", {"times": 1, "completed": 0}, "repeat_unreviewed"),
+            ("execution_skipped", "PRIVATE_SYNTHETIC", "scheduler_metadata_unreviewed"),
+            ("last_dispatch", "PRIVATE_SYNTHETIC", "scheduler_metadata_unreviewed"),
+            ("UNTRUSTED_PRIVATE_SYNTHETIC", "PRIVATE_SYNTHETIC", "definition_keys_unreviewed"),
+        )
+        for field, value, expected in mutations:
+            with self.subTest(field=field):
+                self.enable_strict_script_only()
+                # Restore the exact baseline; no test may leak its value.
+                for transient in ("pending_slot", "fire_claim", "model", "skills",
+                                  "run_count", "repeat", "execution_skipped",
+                                  "last_dispatch", "UNTRUSTED_PRIVATE_SYNTHETIC"):
+                    self.jobs[3].pop(transient, None)
+                self.jobs[3]["schedule"] = {"kind": "cron", "expr": "0 11 * * *"}
+                self.jobs[3]["prompt"] = ""
+                self.jobs[3][field] = value
+                self.save_store()
+                categories, blockers = [], []
+                with self.assertRaises(m.Blocked) as raised:
+                    self.inspect(diagnostics=categories, strict_blockers=blockers)
+                self.assertEqual(str(raised.exception), "autumn_job_identity_drift")
+                self.assertEqual(blockers, [expected])
+                self.assertEqual(categories, ["unclassified"])
+                report_text = repr((str(raised.exception), categories, blockers))
+                self.assertNotIn("PRIVATE_SYNTHETIC", report_text)
+                self.assertLess(len(report_text), 256)
+
+    def test_strict_blocker_only_reported_on_identity_failure(self):
+        self.enable_strict_script_only()
+        categories, blockers = [], []
+        good = self.inspect(diagnostics=categories, strict_blockers=blockers)
+        self.assertEqual(good["identity_mode"], "strict_script_only")
+        self.assertEqual(categories, [])
+        self.assertEqual(blockers, [])
+        self.jobs[3]["no_agent"] = False
+        self.save_store()
+        self.block("autumn_job_identity_drift")  # default has no diagnostics
+
+    def test_cli_diagnose_emits_fixed_category_only_on_block(self):
+        # A mocked CLI: no host/Hermes reads or controller access.
+        def fail_inspect(**kwargs):
+            if kwargs["diagnostic_categories"] is not None:
+                kwargs["diagnostic_categories"].append("unclassified")
+            if kwargs["strict_blockers"] is not None:
+                kwargs["strict_blockers"].append("no_agent_not_enabled")
+            raise m.Blocked("autumn_job_identity_drift")
+
+        with (mock.patch.object(m.pwd, "getpwnam", return_value=SimpleNamespace(
+                  pw_uid=os.geteuid(), pw_dir=str(self.home))),
+              mock.patch.object(m.os, "uname", return_value=SimpleNamespace(
+                  nodename="rpi5")),
+              mock.patch.object(m, "inspect", side_effect=fail_inspect) as mocked):
+            for args, diagnosed in ((["preflight"], False),
+                                    (["preflight", "--diagnose"], True)):
+                with self.subTest(diagnosed=diagnosed):
+                    capture = io.StringIO()
+                    with mock.patch.object(sys, "argv", args), redirect_stdout(capture):
+                        exit_code = m.main()
+                    self.assertEqual(exit_code, 2)
+                    report = json.loads(capture.getvalue())
+                    self.assertEqual(report["result"], "BLOCKED")
+                    self.assertEqual(report["reason"], "autumn_job_identity_drift")
+                    self.assertFalse(report["live_apply_authorized"])
+                    self.assertFalse(report["writes_performed"])
+                    self.assertFalse(report["mutation_started"])
+                    self.assertFalse(report["raw_payload_emitted"])
+                    self.assertEqual("strict_script_only_blocker" in report, diagnosed)
+                    if diagnosed:
+                        self.assertEqual(report["identity_drift_class"], "unclassified")
+                        self.assertEqual(report["strict_script_only_blocker"],
+                                         "no_agent_not_enabled")
+                    self.assertNotIn(str(self.home), capture.getvalue())
+                    self.assertNotIn("PRIVATE_SYNTHETIC", capture.getvalue())
+            self.assertEqual(mocked.call_count, 2)
+
+    def test_strict_blocker_prioritizes_unknown_fields_and_no_agent(self):
+        self.enable_strict_script_only()
+        self.jobs[3]["no_agent"] = False
+        self.jobs[3]["prompt"] = "PRIVATE_SYNTHETIC_SECRET"
+        self.jobs[3]["UNTRUSTED_PRIVATE_SYNTHETIC"] = "PRIVATE_SYNTHETIC_SECRET"
+        self.save_store()
+        categories, blockers = [], []
+        with self.assertRaises(m.Blocked):
+            self.inspect(diagnostics=categories, strict_blockers=blockers)
+        self.assertEqual(blockers, ["definition_keys_unreviewed"])
+        self.assertNotIn("PRIVATE_SYNTHETIC", repr(blockers))
 
     def test_script_only_schedule_and_wrapper_drift_still_fail_closed(self):
         self.enable_strict_script_only()

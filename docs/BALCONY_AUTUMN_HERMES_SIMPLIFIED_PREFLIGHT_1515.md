@@ -74,3 +74,22 @@ replacement; no merge, preflight, test or source sync authorizes it.
 No Hermes job or scheduler edits, no controller execution, no changes to
 12-sensor fail-closed logic, no arbitrary source/metadata hashes and no
 automatic host changes are part of this PR.
+
+## One sanitized identity failure detail (#1517)
+
+When an authorized read-only preflight returns
+`autumn_job_identity_drift`, the existing `--diagnose` option now
+reports one **fixed public** `strict_script_only_blocker` label
+alongside the existing `identity_drift_class`. Examples:
+`no_agent_not_enabled`, `prompt_not_empty`,
+`scheduler_state_unreviewed`, `timezone_unreviewed`,
+`definition_keys_unreviewed`, or `unclassified`.
+Only the **first** strict contract mismatch is categorized; no
+underlying values, raw keys, script, command, job ID, paths or prompts
+are emitted. The default (non-diagnostic) response is unchanged.
+
+This is **diagnosis only**. It neither changes
+`strict_script_only_identity()` acceptance nor lifts BLOCKED,
+re-pins the old job SHA, authorizes a protected read, or permits
+`--apply`. A new narrowly authorized `STRICT READONLY` command
+is needed before running `--diagnose` on `rpi5`.
