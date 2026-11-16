@@ -175,6 +175,109 @@ class RepairTests(unittest.TestCase):
                          "autumn_job_binding_or_delivery_invalid")
         self.assertEqual(diagnostics, [])
 
+
+    def test_hermes_last_dispatch_added_only_always_blocks(self):
+        self.jobs[3]["last_dispatch"] = {"kind": "on_time", "at": "sample"}
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked) as raised:
+            self.inspect(diagnostics=categories)
+        self.assertEqual(str(raised.exception), "autumn_job_identity_drift")
+        self.assertEqual(categories, ["last_dispatch_added_only"])
+
+    def test_hermes_pending_slot_added_only_always_blocks(self):
+        self.jobs[3]["pending_slot"] = {"at": "sample", "by": "gateway"}
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked) as raised:
+            self.inspect(diagnostics=categories)
+        self.assertEqual(str(raised.exception), "autumn_job_identity_drift")
+        self.assertEqual(categories, ["pending_slot_added_only"])
+
+    def test_hermes_two_added_metadata_fields_reconstruct_frozen_hash(self):
+        self.jobs[3]["last_dispatch"] = {"kind": "late"}
+        self.jobs[3]["pending_slot"] = {"at": "sample"}
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked):
+            self.inspect(diagnostics=categories)
+        self.assertEqual(categories,
+                         ["last_dispatch_and_pending_slot_added_only"])
+
+    def test_hermes_counter_plus_dispatch_added_always_blocks(self):
+        self.jobs[3]["run_count"] = 4
+        self.hashes["job_sha"] = m.gate_module()._fingerprint(self.jobs[3])
+        self.jobs[3]["run_count"] = 5
+        self.jobs[3]["last_dispatch"] = {"kind": "late", "attempt": 5}
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked):
+            self.inspect(diagnostics=categories)
+        self.assertEqual(categories, ["run_count_plus_last_dispatch_added_only"])
+
+    def test_hermes_state_added_and_transient_diagnostics_never_pass(self):
+        self.jobs[3]["state"] = "scheduled"
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked):
+            self.inspect(diagnostics=categories)
+        self.assertEqual(categories, ["state_added_only"])
+        self.hashes["job_sha"] = m.gate_module()._fingerprint(self.jobs[3])
+        self.jobs[3]["state"] = "running"
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked):
+            self.inspect(diagnostics=categories)
+        self.assertEqual(categories, ["state_transient_only"])
+
+    def test_hermes_paused_and_unbounded_fields_stay_unclassified(self):
+        for state in ("paused", "completed", "malicious"):
+            with self.subTest(state=state):
+                self.jobs[3]["state"] = state
+                self.save_store()
+                categories = []
+                with self.assertRaises(m.Blocked):
+                    self.inspect(diagnostics=categories)
+                self.assertEqual(categories, ["unclassified"])
+                self.jobs[3].pop("state")
+        self.jobs[3]["last_dispatch"] = {"secret": "SYNTHETIC_PRIVATE" * 300}
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked):
+            self.inspect(diagnostics=categories)
+        self.assertEqual(categories, ["unclassified"])
+        self.assertNotIn("SYNTHETIC_PRIVATE", repr(categories))
+
+    def test_hermes_definition_change_not_hidden_by_metadata_probe(self):
+        self.jobs[3]["last_dispatch"] = {"kind": "late"}
+        self.jobs[3]["schedule"]["display"] = "different"
+        self.jobs[3]["prompt"] = "SYNTHETIC_SECRET_NEVER_PRINT"
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked) as raised:
+            self.inspect(diagnostics=categories)
+        self.assertEqual(str(raised.exception), "autumn_job_identity_drift")
+        self.assertEqual(categories, ["unclassified"])
+        self.assertNotIn("SYNTHETIC_SECRET_NEVER_PRINT", repr(categories))
+        self.jobs[3]["deliver"] = "telegram"
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked) as raised:
+            self.inspect(diagnostics=categories)
+        self.assertEqual(str(raised.exception),
+                         "autumn_job_binding_or_delivery_invalid")
+        self.assertEqual(categories, [])
+
+    def test_hermes_three_scheduler_mutations_are_not_auto_approved(self):
+        self.jobs[3]["run_count"] = 2
+        self.jobs[3]["last_dispatch"] = {"kind": "on_time"}
+        self.jobs[3]["pending_slot"] = {"at": "sample"}
+        self.save_store()
+        categories = []
+        with self.assertRaises(m.Blocked):
+            self.inspect(diagnostics=categories)
+        self.assertEqual(categories, ["unclassified"])
+
     def test_frozen_job_definition_digest_must_match(self):
         self.hashes["job_sha"] = "0" * 64
         self.block("autumn_job_identity_drift")
