@@ -8,6 +8,7 @@ authorization. A PASS is NOT LIVE or deployment authority.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -97,11 +98,245 @@ def from_wrapper(wrapper: bytes, *, home: Path, root: Path) -> Path:
     return target
 
 
+# Frozen, source-reviewed safety invariants for Hermes script-only mode.
+# Only this strict alternative may tolerate scheduler-managed fingerprint drift.
+# In no-agent mode, an empty prompt cannot activate an LLM agent path.
+SCRIPT_ONLY_FIELDS = frozenset({
+    "id", "name", "enabled", "deliver", "script", "prompt", "schedule",
+    "no_agent", "timezone", "grace_minutes", "state", "repeat",
+    "run_count", "next_run_at", "last_run_at", "last_status", "last_error",
+    "last_delivery_at", "last_delivery_error", "last_started_at",
+    "last_completed_at", "created_at", "last_dispatch",
+    "pending_slot", "fire_claim", "execution_skipped",
+    "model", "provider", "skills",
+})
+SCRIPT_ONLY_TIMESTAMPS = (
+    "next_run_at", "last_run_at", "last_delivery_at",
+    "last_started_at", "last_completed_at", "created_at",
+)
+SCRIPT_ONLY_OUTCOMES = ("last_status", "last_error", "last_delivery_error")
+
+
+def strict_script_only_identity(job: dict[str, Any]) -> bool:
+    """Accept only deterministic scheduled script-only binding; not a re-pin.
+
+    Script path and actual wrapper/controller bytes are verified separately
+    later in inspect(). Unknown config, queued runs or agent mode fail closed.
+    """
+    if type(job) is not dict or len(job) > 40:
+        return False
+    if set(job) - SCRIPT_ONLY_FIELDS:
+        return False
+    if job.get("no_agent") is not True or job.get("prompt") != "":
+        return False
+    if (job.get("state") != "scheduled"
+            or job.get("timezone") != "Europe/Berlin"
+            or type(job.get("grace_minutes")) is not int
+            or job["grace_minutes"] != 0):
+        return False
+    schedule = job.get("schedule")
+    if type(schedule) is not dict or not set(schedule) <= {"kind", "expr", "display"}:
+        return False
+    if (schedule.get("kind") != "cron"
+            or schedule.get("expr") != "0 11 * * *"
+            or ("display" in schedule and schedule["display"] != "0 11 * * *")):
+        return False
+    if job.get("pending_slot") is not None or job.get("fire_claim") is not None:
+        return False
+    if job.get("model") is not None or job.get("provider") is not None:
+        return False
+    if job.get("skills") not in (None, []):
+        return False
+    count = job.get("run_count")
+    if count is not None and (type(count) is not int or not 0 <= count <= 1_000_000):
+        return False
+    repeat = job.get("repeat")
+    if repeat is not None:
+        if type(repeat) is not dict or set(repeat) != {"times", "completed"}:
+            return False
+        if repeat["times"] is not None:
+            return False
+        if type(repeat["completed"]) is not int or not 0 <= repeat["completed"] <= 1_000_000:
+            return False
+    if "execution_skipped" in job and type(job["execution_skipped"]) is not bool:
+        return False
+    for key in SCRIPT_ONLY_TIMESTAMPS:
+        value = job.get(key)
+        if value is not None and (type(value) is not str or len(value) > 128):
+            return False
+    for key in SCRIPT_ONLY_OUTCOMES:
+        value = job.get(key)
+        if value is not None and (type(value) is not str or len(value) > 1024):
+            return False
+    if "last_dispatch" in job and not _bounded_hermes_metadata(job["last_dispatch"]):
+        return False
+    return True
+
+
+def strict_script_only_blocker(job: dict[str, Any]) -> str:
+    """First failed strict-mode invariant; public fixed labels only.
+
+    Diagnostic-only: NEVER decides acceptance, replaces the pinned SHA,
+    authorizes operator apply, or echoes a job value/field name from input.
+    strict_script_only_identity() remains the unchanged safety authority.
+    """
+    if type(job) is not dict or len(job) > 40:
+        return "definition_shape_unreviewed"
+    if set(job) - SCRIPT_ONLY_FIELDS:
+        return "definition_keys_unreviewed"
+    if job.get("no_agent") is not True:
+        return "no_agent_not_enabled"
+    if job.get("prompt") != "":
+        return "prompt_not_empty"
+    if job.get("state") != "scheduled":
+        return "scheduler_state_unreviewed"
+    if job.get("timezone") != "Europe/Berlin":
+        return "timezone_unreviewed"
+    if (type(job.get("grace_minutes")) is not int
+            or job["grace_minutes"] != 0):
+        return "grace_unreviewed"
+    schedule = job.get("schedule")
+    if (type(schedule) is not dict
+            or not set(schedule) <= {"kind", "expr", "display"}
+            or schedule.get("kind") != "cron"
+            or schedule.get("expr") != "0 11 * * *"
+            or ("display" in schedule
+                and schedule["display"] != "0 11 * * *")):
+        return "schedule_unreviewed"
+    if job.get("pending_slot") is not None or job.get("fire_claim") is not None:
+        return "pending_dispatch_unreviewed"
+    if (job.get("model") is not None or job.get("provider") is not None
+            or job.get("skills") not in (None, [])):
+        return "agent_bindings_unreviewed"
+    count = job.get("run_count")
+    if count is not None and (type(count) is not int or not 0 <= count <= 1_000_000):
+        return "counter_unreviewed"
+    repeat = job.get("repeat")
+    if repeat is not None:
+        if (type(repeat) is not dict
+                or set(repeat) != {"times", "completed"}
+                or repeat["times"] is not None
+                or type(repeat["completed"]) is not int
+                or not 0 <= repeat["completed"] <= 1_000_000):
+            return "repeat_unreviewed"
+    if ("execution_skipped" in job
+            and type(job["execution_skipped"]) is not bool):
+        return "scheduler_metadata_unreviewed"
+    for key in SCRIPT_ONLY_TIMESTAMPS:
+        value = job.get(key)
+        if value is not None and (type(value) is not str or len(value) > 128):
+            return "scheduler_metadata_unreviewed"
+    for key in SCRIPT_ONLY_OUTCOMES:
+        value = job.get(key)
+        if value is not None and (type(value) is not str or len(value) > 1024):
+            return "scheduler_metadata_unreviewed"
+    if "last_dispatch" in job and not _bounded_hermes_metadata(job["last_dispatch"]):
+        return "scheduler_metadata_unreviewed"
+    # Cannot infer an unreviewed mismatch is harmless.
+    return "unclassified"
+
+
+def classify_run_count_only_drift(job: dict[str, Any], expected_sha: str,
+                                  fingerprint) -> str:
+    """Diagnostic only: a SHA match proves no *other* definition field drift.
+
+    No result from this helper authorizes replacement or re-pins JOB_SHA256.
+    Only the documented runtime counter is substituted, never schedule,
+    script, prompt, credentials, recipient, enabled or delivery.
+    """
+    count = job.get("run_count")
+    if type(count) is not int or not 0 <= count <= 1_000_000:
+        return "unclassified"
+    without_count = dict(job)
+    without_count.pop("run_count")
+    if fingerprint(without_count) == expected_sha:
+        return "run_count_added_only"
+    # Prefer the immediately preceding run; bound work and never infer
+    # a previous definition from an unmatched digest.
+    for previous in range(count - 1, max(-1, count - 513), -1):
+        with_previous_count = dict(job)
+        with_previous_count["run_count"] = previous
+        if fingerprint(with_previous_count) == expected_sha:
+            return "run_count_increment_only"
+    return "unclassified"
+
+
+
+# Exact-SHA reversible probes only. No inference of a previous job definition.
+# These fields are documented as scheduler-owned by Hermes Cron Internals.
+HERMES_TRANSIENT_ADDITIONS = ("last_dispatch", "pending_slot")
+
+
+def _bounded_hermes_metadata(value: Any) -> bool:
+    """Guard the cost of synthetic reconstruction; never serialize to output."""
+    if not isinstance(value, dict) or len(value) > 16:
+        return False
+    try:
+        encoded = json.dumps(value, sort_keys=True, ensure_ascii=True)
+    except (TypeError, ValueError, RecursionError):
+        return False
+    return len(encoded) <= 4096
+
+
+def classify_hermes_scheduler_drift(job: dict[str, Any],
+                                   expected_sha: str, fingerprint) -> str:
+    """Attempt a bounded reconstruction of the PINNED hash, NEVER a PASS.
+
+    A hash match confirms only that a *hypothetical* previous document
+    would match. It cannot establish actual history without a saved preimage.
+    No allowlisted category permits an apply operation or a SHA re-pin.
+    """
+    previous = classify_run_count_only_drift(job, expected_sha, fingerprint)
+    if previous != "unclassified":
+        return previous
+
+    candidates: list[str] = []
+    for field in HERMES_TRANSIENT_ADDITIONS:
+        if field not in job or not _bounded_hermes_metadata(job[field]):
+            continue
+        without_metadata = dict(job)
+        without_metadata.pop(field)
+        if fingerprint(without_metadata) == expected_sha:
+            candidates.append(field + "_added_only")
+        count = classify_run_count_only_drift(
+            without_metadata, expected_sha, fingerprint
+        )
+        if count in ("run_count_increment_only", "run_count_added_only"):
+            candidates.append("run_count_plus_" + field + "_added_only")
+
+    # 'state' is an actuator/scheduler decision field: never call it
+    # harmless, and never reconstruct paused/completed/disabled states.
+    state = job.get("state")
+    if type(state) is str and state in ("scheduled", "running"):
+        without_state = dict(job)
+        without_state.pop("state")
+        if fingerprint(without_state) == expected_sha:
+            candidates.append("state_added_only")
+        old_state = "running" if state == "scheduled" else "scheduled"
+        with_previous_state = dict(job)
+        with_previous_state["state"] = old_state
+        if fingerprint(with_previous_state) == expected_sha:
+            candidates.append("state_transient_only")
+
+    if all(field in job and _bounded_hermes_metadata(job[field])
+           for field in HERMES_TRANSIENT_ADDITIONS):
+        without_both = dict(job)
+        for field in HERMES_TRANSIENT_ADDITIONS:
+            without_both.pop(field)
+        if fingerprint(without_both) == expected_sha:
+            candidates.append("last_dispatch_and_pending_slot_added_only")
+
+    # An ambiguous result is not trustworthy even for a diagnostic.
+    return candidates[0] if len(candidates) == 1 else "unclassified"
+
+
 def inspect(*, store: Path, home: Path, source: Path, bot: Path,
             expected_uid: int, old_sha: str = OLD_SHA256,
             wrapper_sha: str = WRAPPER_SHA256,
             candidate_sha: str = CANDIDATE_SHA256,
-            job_sha: str = JOB_SHA256) -> dict[str, Any]:
+            job_sha: str = JOB_SHA256,
+            diagnostic_categories: list[str] | None = None,
+            strict_blockers: list[str] | None = None) -> dict[str, Any]:
     gate = gate_module()
     try:
         _raw, jobs, fmt = gate._read_store(store, expected_uid)
@@ -132,7 +367,18 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
     require(all(not gate._watering_candidate(job)
                 for i, job in enumerate(jobs) if i not in selected),
             "unexpected_watering_candidate")
-    require(gate._fingerprint(job) == job_sha, "autumn_job_identity_drift")
+    legacy_pin_matches = gate._fingerprint(job) == job_sha
+    script_only_matches = (
+        not legacy_pin_matches and strict_script_only_identity(job)
+    )
+    if not legacy_pin_matches and not script_only_matches:
+        if diagnostic_categories is not None:
+            diagnostic_categories.append(
+                classify_hermes_scheduler_drift(job, job_sha, gate._fingerprint)
+            )
+        if strict_blockers is not None:
+            strict_blockers.append(strict_script_only_blocker(job))
+        raise Blocked("autumn_job_identity_drift")
     binding = job.get("script")
     require(isinstance(binding, str) and len(binding) <= 1024 and
             bool(binding) and not any(ord(c) < 32 for c in binding),
@@ -189,6 +435,9 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
         "existing_autumn_job": "enabled_local_unique",
         "legacy_jobs": "three_disabled",
         "job_definition_sha256": gate._fingerprint(job),
+        "identity_mode": ("pinned_legacy" if legacy_pin_matches
+                          else "strict_script_only"),
+        "script_only_contract_verified": bool(script_only_matches),
         "wrapper_sha256": digest(wrapper_raw),
         "deployed_controller_sha256": digest(target_raw),
         "candidate_controller_sha256": digest(replacement),
@@ -205,6 +454,14 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Sanitized existing 11:00 Hermes job preflight"
+    )
+    parser.add_argument("--diagnose", action="store_true",
+                        help="Categorize bounded Hermes metadata drift; never PASS")
+    args = parser.parse_args()
+    diagnostic_categories: list[str] = []
+    strict_blockers: list[str] = []
     try:
         user = pwd.getpwnam("andris")
         require(os.uname().nodename.split(".")[0] == "rpi5" and
@@ -216,6 +473,8 @@ def main() -> int:
             source=home / "RPi5_main/ops/bin/balcony-watering-autumn-notify-only",
             bot=home / "RPi5_main/ops/lib/balkons-bot.py",
             expected_uid=user.pw_uid,
+            diagnostic_categories=diagnostic_categories if args.diagnose else None,
+            strict_blockers=strict_blockers if args.diagnose else None,
         )
     except Blocked as exc:
         result = {
@@ -227,6 +486,13 @@ def main() -> int:
             "writes_performed": False,
             "raw_payload_emitted": False,
         }
+        if args.diagnose and str(exc) == "autumn_job_identity_drift":
+            result["identity_drift_class"] = (
+                diagnostic_categories[0] if diagnostic_categories else "unclassified"
+            )
+            result["strict_script_only_blocker"] = (
+                strict_blockers[0] if strict_blockers else "unclassified"
+            )
     except Exception:
         result = {
             "schema": SCHEMA,
