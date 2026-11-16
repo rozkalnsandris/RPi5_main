@@ -183,7 +183,6 @@ class SingleFileTransactionTests(unittest.TestCase):
             "mutation_started": False,
             "writes_performed": False,
         }
-        import json
         for key, value in (
             ("valid", True),
             ("script_only_contract_verified", False),
@@ -196,9 +195,9 @@ class SingleFileTransactionTests(unittest.TestCase):
             if key != "valid":
                 data[key] = value
             preflight.write_text(
-                "class Blocked(Exception): pass\\n"
-                "def inspect(**kwargs):\\n"
-                "    return " + repr(data) + "\\n",
+                "class Blocked(Exception): pass\n"
+                "def inspect(**kwargs):\n"
+                "    return " + repr(data) + "\n",
                 encoding="utf-8",
             )
             if key == "valid":
