@@ -85,12 +85,12 @@ class RepairTests(unittest.TestCase):
         self.store.write_text(json.dumps({"jobs": self.jobs, "updated_at": "synthetic"}))
         self.store.chmod(0o600)
 
-    def inspect(self, *, diagnostics=None):
+    def inspect(self, *, diagnostics=None, strict_blockers=None):
         return m.inspect(
             store=self.store, home=self.home,
             source=self.source, bot=self.bot,
             expected_uid=os.geteuid(), diagnostic_categories=diagnostics,
-            **self.hashes,
+            strict_blockers=strict_blockers, **self.hashes,
         )
 
     def block(self, needle):
@@ -427,6 +427,73 @@ class RepairTests(unittest.TestCase):
             else:
                 self.jobs[3].pop(field, None)
             self.save_store()
+
+    def test_strict_identity_blocker_categorizes_without_private_values(self):
+        self.enable_strict_script_only()
+        # Each synthetic mismatch must still block before wrapper/controller
+        # reads. Diagnostics are fixed enums, never arbitrary input values.
+        mutations = (
+            ("no_agent", False, "no_agent_not_enabled"),
+            ("prompt", "PRIVATE_SYNTHETIC_PROMPT", "prompt_not_empty"),
+            ("state", "paused", "scheduler_state_unreviewed"),
+            ("timezone", "PRIVATE_SYNTHETIC_TZ", "timezone_unreviewed"),
+            ("grace_minutes", 30, "grace_unreviewed"),
+            ("schedule", {"kind": "cron", "expr": "0 11 * * *",
+                          "display": "PRIVATE_SYNTHETIC"}, "schedule_unreviewed"),
+            ("pending_slot", {"at": "PRIVATE_SYNTHETIC"}, "pending_dispatch_unreviewed"),
+            ("fire_claim", {"at": "PRIVATE_SYNTHETIC"}, "pending_dispatch_unreviewed"),
+            ("model", "PRIVATE_SYNTHETIC", "agent_bindings_unreviewed"),
+            ("skills", ["PRIVATE_SYNTHETIC"], "agent_bindings_unreviewed"),
+            ("run_count", True, "counter_unreviewed"),
+            ("repeat", {"times": 1, "completed": 0}, "repeat_unreviewed"),
+            ("execution_skipped", "PRIVATE_SYNTHETIC", "scheduler_metadata_unreviewed"),
+            ("last_dispatch", "PRIVATE_SYNTHETIC", "scheduler_metadata_unreviewed"),
+            ("UNTRUSTED_PRIVATE_SYNTHETIC", "PRIVATE_SYNTHETIC", "definition_keys_unreviewed"),
+        )
+        for field, value, expected in mutations:
+            with self.subTest(field=field):
+                self.enable_strict_script_only()
+                # Restore the exact baseline; no test may leak its value.
+                for transient in ("pending_slot", "fire_claim", "model", "skills",
+                                  "run_count", "repeat", "execution_skipped",
+                                  "last_dispatch", "UNTRUSTED_PRIVATE_SYNTHETIC"):
+                    self.jobs[3].pop(transient, None)
+                self.jobs[3]["schedule"] = {"kind": "cron", "expr": "0 11 * * *"}
+                self.jobs[3]["prompt"] = ""
+                self.jobs[3][field] = value
+                self.save_store()
+                categories, blockers = [], []
+                with self.assertRaises(m.Blocked) as raised:
+                    self.inspect(diagnostics=categories, strict_blockers=blockers)
+                self.assertEqual(str(raised.exception), "autumn_job_identity_drift")
+                self.assertEqual(blockers, [expected])
+                self.assertEqual(categories, ["unclassified"])
+                report_text = repr((str(raised.exception), categories, blockers))
+                self.assertNotIn("PRIVATE_SYNTHETIC", report_text)
+                self.assertLess(len(report_text), 256)
+
+    def test_strict_blocker_only_reported_on_identity_failure(self):
+        self.enable_strict_script_only()
+        categories, blockers = [], []
+        good = self.inspect(diagnostics=categories, strict_blockers=blockers)
+        self.assertEqual(good["identity_mode"], "strict_script_only")
+        self.assertEqual(categories, [])
+        self.assertEqual(blockers, [])
+        self.jobs[3]["no_agent"] = False
+        self.save_store()
+        self.block("autumn_job_identity_drift")  # default has no diagnostics
+
+    def test_strict_blocker_prioritizes_unknown_fields_and_no_agent(self):
+        self.enable_strict_script_only()
+        self.jobs[3]["no_agent"] = False
+        self.jobs[3]["prompt"] = "PRIVATE_SYNTHETIC_SECRET"
+        self.jobs[3]["UNTRUSTED_PRIVATE_SYNTHETIC"] = "PRIVATE_SYNTHETIC_SECRET"
+        self.save_store()
+        categories, blockers = [], []
+        with self.assertRaises(m.Blocked):
+            self.inspect(diagnostics=categories, strict_blockers=blockers)
+        self.assertEqual(blockers, ["definition_keys_unreviewed"])
+        self.assertNotIn("PRIVATE_SYNTHETIC", repr(blockers))
 
     def test_script_only_schedule_and_wrapper_drift_still_fail_closed(self):
         self.enable_strict_script_only()
