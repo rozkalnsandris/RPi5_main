@@ -117,9 +117,9 @@ def source_gate(home: Path, *, owner: int, expected_main: str) -> bytes:
             and git(repo, "branch", "--show-current") == "main",
             "checkout_drift")
     paths = (SOURCE_REL, OP_REL, PRE_REL, GATE_REL, BOT_REL)
+    # Fail closed on ANY dirty tracked file, not only the deployment inputs.
     require(not git(repo, "status", "--porcelain=v1",
-                    "--untracked-files=no", "--", *paths),
-            "tracked_source_dirty")
+                    "--untracked-files=no"), "tracked_source_dirty")
     require(set(git(repo, "ls-files", "--", *paths).splitlines()) == set(paths),
             "required_source_untracked")
     result: dict[str, bytes] = {}
@@ -178,6 +178,7 @@ def write_exclusive(path: Path, data: bytes, *, mode: int,
     state["mutation_started"] = True
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL
                  | os.O_NOFOLLOW | os.O_CLOEXEC, mode)
+    state["writes_performed"] = True
     try:
         os.fchmod(fd, mode)
         with os.fdopen(fd, "wb", closefd=False) as stream:
@@ -243,7 +244,7 @@ def precheck_window() -> None:
 
 
 def main() -> int:
-    state = {"mutation_started": False}
+    state = {"mutation_started": False, "writes_performed": False}
     try:
         ap = argparse.ArgumentParser()
         ap.add_argument("--expected-main", required=True)
@@ -284,7 +285,7 @@ def main() -> int:
             "result": outcome, "expected_main": args.expected_main,
             "candidate_sha256": NEW_SHA,
             "mutation_started": state["mutation_started"],
-            "writes_performed": state["mutation_started"],
+            "writes_performed": state["writes_performed"],
             "telegram_delivery": "unverified",
             "raw_payload_emitted": False,
         }
@@ -292,13 +293,13 @@ def main() -> int:
         result = {"result": "STOP" if state["mutation_started"] else "BLOCKED",
                   "reason": str(exc),
                   "mutation_started": state["mutation_started"],
-                  "writes_performed": state["mutation_started"],
+                  "writes_performed": state["writes_performed"],
                   "raw_payload_emitted": False}
     except Exception:
         result = {"result": "STOP" if state["mutation_started"] else "BLOCKED",
                   "reason": "internal_error",
                   "mutation_started": state["mutation_started"],
-                  "writes_performed": state["mutation_started"],
+                  "writes_performed": state["writes_performed"],
                   "raw_payload_emitted": False}
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     return 0 if result["result"] in ("REPLACED", "SOURCE_AND_SCHEDULE_READY_RUNTIME_UNVERIFIED") else 2
