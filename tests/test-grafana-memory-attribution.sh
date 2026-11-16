@@ -357,7 +357,9 @@ assert all(marker in v02 for marker in (
     "140f51fa55d0a66ad6da6d551bc6dc36b5a54718",
     "22d00a74b9bab15fcc18a48825bd498996fee4aa627d612a92691cf7cb40d37a",
     "3a614893f63a56bd57d4a5b6d4416c1ebd91ab27939db0c4963a013f3cccc27c",
-    "within-invocation", "109", "oom_kill", "NOT", "#1468",
+    "within-invocation", "109", "oom_kill",
+    "not an authorization to collect again",
+    "No identity continuity is claimed", "#1468",
 )), "Grafana V02 sanitized evidence markers missing"
 PY
 
