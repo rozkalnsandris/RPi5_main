@@ -126,9 +126,12 @@ def _metadata_shape(job: dict[str, Any]) -> bool:
             value = job[key]
             if type(value) is not str or len(value) > 128:
                 return False
+    # pending_slot may represent a queued physical watering dispatch.
+    # Even structurally valid pending slots cannot be presumed harmless.
+    if "pending_slot" in job:
+        return False
     for key, allowed in (
         ("last_dispatch", {"kind", "at"}),
-        ("pending_slot", {"at", "by"}),
     ):
         if key not in job:
             continue
