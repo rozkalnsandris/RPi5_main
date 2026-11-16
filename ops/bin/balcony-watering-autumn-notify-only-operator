@@ -142,13 +142,21 @@ def preflight_gate(home: Path, *, owner: int) -> dict:
     require(spec is not None, "preflight_unavailable")
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
-    report = module.inspect(
-        store=home / ".hermes/cron/jobs.json",
-        home=home,
-        source=home / "RPi5_main" / SOURCE_REL,
-        bot=home / "RPi5_main" / BOT_REL,
-        expected_uid=owner,
-    )
+    try:
+        report = module.inspect(
+            store=home / ".hermes/cron/jobs.json",
+            home=home,
+            source=home / "RPi5_main" / SOURCE_REL,
+            bot=home / "RPi5_main" / BOT_REL,
+            expected_uid=owner,
+        )
+    except module.Blocked as exc:
+        # Imported preflight owns a distinct exception class. Never display
+        # arbitrary exception text; retain a fixed fail-closed classification.
+        reason = ("preflight_job_identity_drift"
+                  if str(exc) == "autumn_job_identity_drift"
+                  else "preflight_not_ready")
+        raise Blocked(reason) from None
     require(report.get("result") == "SOURCE_NOTIFY_ONLY_PREFLIGHT_PASS"
             and report.get("job_definition_sha256") == JOB_SHA
             and report.get("wrapper_sha256") == WRAPPER_SHA
