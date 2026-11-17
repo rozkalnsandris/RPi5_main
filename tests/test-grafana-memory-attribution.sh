@@ -408,10 +408,10 @@ assert all(marker.lower() in document.lower() for marker in markers)
 PY
 
 # Source-only regression for independently verified composite baseline documentation.
-python3 -B - "${repo}/docs/RPI5_MEMORY_BASELINE_20261116_1468.md" "${repo}/docs/GRAFANA_HOST_MEMORY_COMPOSITE_1468.md" <<'PY'
+python3 -B - "${repo}/docs/RPI5_MEMORY_BASELINE_20261116_1468.md" "${repo}/docs/GRAFANA_HOST_MEMORY_COMPOSITE_1468.md" "${repo}/docs/V09_MEMORY_PRESSURE_SERIES_CONTRACT.md" <<'PY'
 from pathlib import Path
 import sys
-evidence, contract = [Path(p).read_text(encoding="utf-8") for p in sys.argv[1:]]
+evidence, contract, series_contract = [Path(p).read_text(encoding="utf-8") for p in sys.argv[1:]]
 required = (
     "96154199cfb0282292a964121d1d139383789f37",
     "2026-11-16T22:32:41Z", "2026-11-16T22:33:26Z",
@@ -428,6 +428,15 @@ assert "RPI5_MEMORY_BASELINE_20261116_1468.md" in contract
 assert "NOT RUN ON RPi5" in contract and "before the 2026-11-16 authorized collection" in contract
 assert "not continuously measured" in evidence.lower()
 assert "not zero PSI" in evidence
+assert all(token in evidence for token in (
+    "2026-11-17", "/proc/pressure", "/proc/pressure/memory",
+    "psi_start", "psi_end", "command_available=false",
+    "exit_status=127", "bytes=0", "NO_LIVE_AUTHORITY",
+))
+assert "Interpretation of distinct idle and busy windows (#1468)" in series_contract
+assert "proof of sustained pressure" in series_contract
+assert "unknown" in series_contract
+
 PY
 
 printf '%s\n' 'Grafana memory attribution tests: PASS'

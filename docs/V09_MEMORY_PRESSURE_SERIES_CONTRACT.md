@@ -32,4 +32,22 @@ The report summarizes source windows and associations only. It does not prove ca
 
 ## PSI availability (v09.1.0; #1468)
 
-V09 checks PSI source status even for verified legacy V08 bundles. It emits `psi_available=false` and null deltas when absent; aggregate PSI is null when any source lacks data. Confirmed repeated swap-out still establishes `sustained_pressure`; no recorded activity plus incomplete PSI results in `indeterminate`, not `stable_idle`. The verifier supports historical v09.0.0 output for provenance; reanalyze old sources for corrected PSI interpretation.
+V09 checks PSI source status even for verified legacy V08 bundles. It emits `psi_available=false` and null deltas when absent; aggregate PSI is null when any source lacks data. Confirmed repeated swap-out still establishes `sustained_pressure`; no recorded activity plus incomplete PSI results in `indeterminate`, not `stable_idle`. The verifier supports historical v09.0.0 output for provenance; reanalyze old sources for corrected PSI interpretation.\n\n## Interpretation of distinct idle and busy windows (#1468)
+
+A V09 classification is a within-input observation heuristic, **not
+proof of sustained pressure across independently observed idle and
+busy periods**. In particular, swap-out in two adjacent five-second
+V08 samples can satisfy the rule for `sustained_pressure`, even if
+these were collected during a single brief interval. Do not translate
+that label into a cross-day trend, Grafana causation or OOM prognosis.
+
+For RPi5 #1468, compare **distinct idle and busy windows** under
+separately authorized LIVE captures. The 2026-11-16 four-window
+composite all belongs to one short Grafana interval; no independent
+busy-versus-idle classification has been established. Both PSI
+sections were unavailable in all four verified V08 inputs.
+Follow-up read-only metadata on 2026-11-17 confirmed the
+`/proc/pressure` directory was absent. PSI therefore remains
+`unknown`, not measured zero; no kernel setting change is implied.
+
+See [the verified #1468 baseline](RPI5_MEMORY_BASELINE_20261116_1468.md).

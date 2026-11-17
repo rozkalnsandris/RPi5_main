@@ -98,3 +98,46 @@ exact owner authority and a fail-closed STOP with no retry/rollback.
 See [composite source contract](GRAFANA_HOST_MEMORY_COMPOSITE_1468.md),
 [V08 contract](V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md),
 and [Grafana V02 identity contract](GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md).
+
+## Read-only PSI availability follow-up (2026-11-17; #1468)
+
+A narrowly scoped unprivileged **metadata-only** follow-up checked the
+four already verified V08 `section-status.tsv` files under the existing
+ignored host evidence directory. All four recorded the exact same result
+for both `psi_start` and `psi_end`: `command_available=false`,
+`exit_status=127`, and `bytes=0` (eight unavailable section reads).
+An independent `lstat` check found **both** `/proc/pressure` and
+`/proc/pressure/memory` **absent** on `rpi5` at this later observation.
+
+The historical status proves PSI was unavailable **to V08 during the
+2026-11-16 captures**. The later path check confirms that the interface
+was still absent on 2026-11-17. Neither result proves *why* the kernel
+does not expose it, and neither is evidence of zero PSI or of a
+successful PSI measurement. No `/proc/pressure` content, kernel logs,
+kernel command line or configuration were read. No service or system
+settings were modified. Do **not** enable PSI, adjust boot/kernel options
+or request privileged inspection under the existing authorization.
+
+### Next evidence scope, not an authorization
+
+The remaining comparison needs **distinct natural idle and
+representative busy periods**, not four consecutive samples from one
+45-second Grafana window. Reuse the existing V08 collector with
+`--skip-kernel-events` and the independently verified V09 memory series
+analyzer (`scripts/analyze-memory-pressure-series.py`), rather than
+building another collector or repeating Grafana GETs by default.
+Schedule the two periods only under separately specified owner LIVE
+authority; V08 and V09 output creation writes ignored evidence and is
+**not** covered by `START`. Keep PSI explicitly **unknown** if the
+interface remains absent, and do not infer a PSI rate from swap counts.
+
+V09's `sustained_pressure` label is a **deterministic heuristic**: two
+swap-out-positive snapshots close together do **not** by themselves
+prove sustained pressure over separate hours or workloads. Require
+cross-period evidence and describe uncertainty before recommending any
+resource budget change. Measured process PSS and comparable
+per-container peaks are still missing; do not claim that V08 RSS or
+Grafana historical `memory.peak` fills those gaps. Preserve original
+raw evidence on host; GitHub gets sanitized facts only.
+
+**NO_LIVE_AUTHORITY; #1468 remains OPEN.**
