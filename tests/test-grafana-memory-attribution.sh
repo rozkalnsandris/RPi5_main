@@ -407,4 +407,27 @@ markers = (
 assert all(marker.lower() in document.lower() for marker in markers)
 PY
 
+# Source-only regression for independently verified composite baseline documentation.
+python3 -B - "${repo}/docs/RPI5_MEMORY_BASELINE_20261116_1468.md" "${repo}/docs/GRAFANA_HOST_MEMORY_COMPOSITE_1468.md" <<'PY'
+from pathlib import Path
+import sys
+evidence, contract = [Path(p).read_text(encoding="utf-8") for p in sys.argv[1:]]
+required = (
+    "96154199cfb0282292a964121d1d139383789f37",
+    "2026-11-16T22:32:41Z", "2026-11-16T22:33:26Z",
+    "4/4 V08", "1/1 Grafana V02", "nominal_overlap_not_alignment",
+    "verified_same_window=false", "proven_causation=false",
+    "1361.70", "1312.94", "1859.75", "1851.75",
+    "883", "195", "976", "0/4 measured",
+    "Grafana `memory.events.local max`", "**6**",
+    "300 MiB", "0 / 0", "--skip-kernel-events",
+    "NO_LIVE_AUTHORITY", "#1468 stays OPEN",
+)
+assert all(token.lower() in evidence.lower() for token in required), "missing verified-baseline invariant"
+assert "RPI5_MEMORY_BASELINE_20261116_1468.md" in contract
+assert "NOT RUN ON RPi5" in contract and "before the 2026-11-16 authorized collection" in contract
+assert "not continuously measured" in evidence.lower()
+assert "not zero PSI" in evidence
+PY
+
 printf '%s\n' 'Grafana memory attribution tests: PASS'
