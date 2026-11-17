@@ -1,6 +1,8 @@
 # Grafana + RPi5 memory: composite offline evidence and LIVE decision (#1468)
 
-**Status: SOURCE-ONLY IMPLEMENTED; NOT RUN ON RPi5; NO_LIVE_AUTHORITY.** This is a bounded *offline* adapter to existing V08 and Grafana V02 verified bundles, not a deployed host collector, scheduler or permission to query internal metrics. **#1468 remains OPEN.**
+**Historical status, before the 2026-11-16 authorized collection: SOURCE-ONLY IMPLEMENTED; NOT RUN ON RPi5; NO_LIVE_AUTHORITY.** This is a bounded *offline* adapter to existing V08 and Grafana V02 verified bundles, not a deployed host collector, scheduler or permission to query internal metrics. **#1468 remains OPEN.**
+
+**Updated 2026-11-16:** one separately owner-authorized composite collection succeeded, with 4/4 V08 and 1/1 Grafana V02 bundles independently verified. This historical contract does not grant repeat LIVE authority. See [sanitized verified baseline](RPI5_MEMORY_BASELINE_20261116_1468.md); #1468 stays OPEN.
 
 ## Existing evidence (2026-11-15–16)
 
