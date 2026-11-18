@@ -5,10 +5,13 @@
 # Do NOT enable until a distinct owner-approved HA cutover preflight confirms:
 # - the MQTT integration and expected exact notification topic;
 # - the installed Telegram bot integration, one allowlisted recipient chat;
-# - replacement of the placeholder notify entity_id with that recipient;
+# - the approved notify.andris entity still maps to the tested chat;
 # - a single active notification consumer (avoid duplicate deliveries).
-# Keep the existing RPi5 Telegram command poller until a separate verified
-# command-safety cutover preserves /stop and fail-closed /laist* gates.
+# This outgoing-only automation is also compatible with HA Telegram Polling.
+# Polling command reference (merged #1526) is staged separately and disabled.
+# Before retiring the old RPi5 bot, verify an independent physical/HA STOP path.
+# Only one Telegram Polling receiver per bot token; verify exact bot/notify mapping.
+# Keep this disabled until the old MQTT forwarding consumer is inactive.
 - id: balkons_telegram_native_notification_staged
   alias: "Balkons: MQTT notification to native Telegram (staged)"
   description: "Disabled HA 2026.11 reference; not a deployment instruction."
@@ -26,9 +29,8 @@
   actions:
     - action: telegram_bot.send_message
       data:
-        # Must be replaced with the verified notify entity for the
-        # explicitly allowlisted chat. Never use an inferred default chat.
-        entity_id: notify.replace_with_approved_telegram_chat
+        # Owner-tested HA notify entity; reconfirm it before LIVE cutover.
+        entity_id: notify.andris
         message: "{{ trigger.payload }}"
         parse_mode: plain_text
   mode: queued

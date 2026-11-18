@@ -1,5 +1,15 @@
 # Balkona Telegram: vienkāršāka Home Assistant integrācija (source only, #1490)
 
+**AKTUĀLAIS 2026-11-18:** šo dokumentu lasa kopā ar pēdējo
+nodaļu “AKTUĀLĀ PĀRSLĒGŠANA — #1523 + #1525”. Vēsturiskie
+Broadcast-only un #1490/#1521 2 posmu plāni nav izpildāmas
+instrukcijas. Šobrīd mērķis ir saglabāt Telegram komandas caur
+vienu HA Polling integrāciju; `/laist*` paliek bloķēta.
+
+**Pašreizējais vienkāršotais aizstāšanas lēmums:** skatīt apakšā sadaļu
+**AKTUĀLAIS LĒMUMS — #1523**. Agrākā #1490/#1521 komandu
+migrācija un #1521 opt-out apraksta vēsturiskos variantus.
+
 ## Lēmums
 
 **Mērķis:** Home Assistant `Telegram bot` + `MQTT` integrācijas, nevis
@@ -73,10 +83,10 @@ atspējots, opt-in automatizācijas paraugs**, kas:
 - Pieņem tikai netukšu un līdz 1024 zīmēm garu paziņojumu; uzlikts
   `mode: queued` ar ierobežotu rindu.
 - Apzināti satur `initial_state: false` un
-  `notify.replace_with_approved_telegram_chat` placeholder. Neviena
+  `notify.andris` saņēmēju (tikai pēc atkārtotas LIVE pārbaudes). Neviena
   tērzētava netiek automātiski minēta; īpašniekam jāpiesaista **precīza
-  atļautā Telegram notify entītija** pēc HA evidence. Kamēr placeholder
-  nav pārskatīts, šo paraugu nedrīkst aktivizēt.
+  atļautā Telegram notify entītija** pēc HA evidence. Kamēr saņēmējs nav revalidēts,
+  šo paraugu nedrīkst aktivizēt.
 - **Nesatur** `mqtt.publish`, `balkons/cmd` vadību, Telegram tokenu,
   REST pieprasījumus, skriptus vai sensoru stāvokļa izmaiņas.
 - Netiek automātiski importēts HA konfigurācijā: GitHub merge to
@@ -189,3 +199,109 @@ paralēli esošajai RPi5 pārsūtīšanai.
 
 Nedz šis avots, nedz #1521 pilnais source darbs neautorizē HA/RPi5
 runtime darbības, Telegram/MQTT sūtīšanu vai aktuatoru komandas.
+
+## AKTUĀLĀ PĀRSLĒGŠANA — #1523 + #1525: HA Polling ar komandām (2026-11-18)
+
+**Šī nodaļa aizstāj iepriekšējās Broadcast-only bota izslēgšanas
+instrukcijas un vēsturiskās #1490/#1521 alternatīvas.** Atsevišķi
+paziņojumu un komandu avota faili ir VIENA paredzētā HA Telegram
+migrācija, nevis divas konkurējošas Telegram integrācijas.
+
+### Gala funkcionalitāte un atļaujas
+
+- Ienākošās komandas jau sagatavotas `RPi5_main/main` pēc
+  [PR #1526](https://github.com/rozkalnsandris/RPi5_main/pull/1526):
+  `ops/homeassistant/balkons-telegram-polling-commands.yaml`.
+  Tā ir **atspējota**, ar privāti aizstājamām `event`, `chat_id` un
+  `user_id` vērtībām. `/stop` -> `balkons/cmd=stop`;
+  `/mitrums`, `/statuss` un `/raw` sūta fiksētus diagnostikas
+  pieprasījumus; `/start` izsūta palīdzību.
+- Izejošajiem paziņojumiem izmanto `ops/homeassistant/balkons-telegram-native-notify.yaml`:
+  precīza MQTT tēma `balkons/telegram_out`, viena
+  `telegram_bot.send_message` darbība, `notify.andris`,
+  `initial_state: false`, bez MQTT komandu publicēšanas.
+- `/laist` un visas `/laist_*` komandas ir **DENY**, nevis
+  iepriekšējā bota manuālās laistīšanas funkcijas atjaunošana.
+  HA vēl nav verificēta līdzvērtīga RPi5 `manual-safety-v1.json`
+  sensoru/sala/svaiguma/dienas limita pārbaude.
+- Paredzēts **viens atļautais Polling saņēmējs konkrētam bot tokenam**
+  pēc vecā RPi5 `getUpdates` pollera izslēgšanas. Vienas HA Telegram
+  Polling integrācijas notify entītijas var nosūtīt izejošās ziņas;
+  Broadcast-only režīms komandas nesaņem. **Nepievienot** otru
+  Polling klientu ar to pašu tokenu. <https://www.home-assistant.io/integrations/telegram_bot/>
+- HA UI 2026-11-18 tika novēroti **divi Broadcast ieraksti**:
+  `Balkona Laistīšana` un `Andris`. Tas **nepierāda**, ka tie
+  pieder vienam bot tokenam vai ka `notify.andris` ir paredzētā
+  Polling bota notify entītija. Pirms jebkuras LIVE darbības privāti
+  noteikt precīzu bot config entry/event entity, saņēmēja čatu,
+  atļauto sūtītāju un `notify.andris` saistību; publiskā repo
+  neatklāt čata ID, lietotāja ID, tokenu vai HA raw konfigurāciju.
+  Nepārkonfigurēt nejaušu vai nepareizu Broadcast ierakstu.
+  <https://www.home-assistant.io/actions/telegram_bot.send_message/>
+
+### Neatkarīgais STOP ceļš (source pierādījums, NE LIVE garantija)
+
+ESP32 firmware MQTT discovery paredz `Sūknis` slēdzi ar
+`cmd_t=balkons/sukna/komanda`, `pl_off=OFF`,
+`stat_t=balkons/sukna/stends` un `avty_t=balkons/status`.
+Firmware `OFF` apstrādā kā steidzamu releja izslēgšanu.
+HA UI 2026-11-18 tika novērota MQTT entītija `Sūknis` ar
+stāvokli `Off`. **Tas neapliecina fiziskā sūkņa stāvokli,
+komandas piegādi vai neatkarīgās vadības pieejamību nākotnē.**
+Konkrētais `switch.*` entity ID un pieejamības/stāvokļa svaigums
+jānosaka privāti; testējot `switch.turn_off` vai `mqtt.publish`,
+tiek veikta aktuatora LIVE mutation, kam vajag atsevišķu īpašnieka atļauju.
+Pirms bota izslēgšanas jābūt neatkarīgi pārbaudītam un īpašniekam
+pieejamam reālam STOP ceļam. MQTT publish rezultāts nav fiziska ACK.
+<https://www.home-assistant.io/integrations/switch.mqtt/>
+
+### Secīgais cutover (tikai NĀKOTNES, atsevišķi autorizējamas LIVE darbības)
+
+1. **READONLY preflight:** verificēt tieši iesaistīto Telegram botu
+   un `Broadcast`/iespējamo `Polling` režīmu, `notify.andris`
+   piederību, `event` ID, privātu chat/user allowlist, HA MQTT
+   savienojumu, aktīvās HA automatizācijas, RPi5 `balkons-bot.service`
+   lifecycle un veco `getUpdates` klientu. Pārbaudīt neatkarīgā
+   STOP ceļa fizisku pieejamību un drošuma nosacījumus.
+   Ja šos pierādījumus nevar iegūt: **BLOCKED**, servisu neaiztikt.
+2. **Staging OFF ar atsevišķu HA LIVE atļauju:** sagatavot divas
+   HA automatizācijas atspējotas. Neieslēgt ne komandas, ne MQTT
+   paziņojumu patērētāju, kamēr vecais bots saņem Telegram
+   komandas un pārsūta `balkons/telegram_out`.
+   `event`/chat/user placeholder vērtības aizstāt tikai privāti
+   pēc īstā HA Polling event entity iegūšanas.
+3. **Atsevišķa īpašnieka Composite STRICT LIVE atļauja:**
+   tikai pēc neatkarīgā STOP apstiprinājuma izslēgt vecā bota
+   servisu ar vienu precīzi autorizētu
+   `systemctl disable --now balkons-bot.service`; pārbaudīt
+   `inactive/disabled` un to, ka vecais polleris/forwarder
+   tiešām apturēts. Ja stāvoklis neskaidrs: **STOP**, bez retry,
+   rollback vai cleanup.
+4. **Pēc vecā pollera apturēšanas**, ar atsevišķi autorizētu HA UI
+   izmaiņu ieslēgt **vienu** pareizā Telegram bota Polling režīmu,
+   pārbaudīt `telegram_command` event entity un privātos
+   `chat_id`/`user_id`. Piesaistīt komandu automātiku, saglabājot
+   `/laist*` DENY; ieslēgt tikai tad, kad ir neatkarīgs STOP,
+   pareiza sūtītāja saistība un pārbaudīts komandu ceļš.
+5. Pēc vecā MQTT paziņojumu patērētāja apturēšanas un saņēmēja
+   revalidācijas atsevišķi aktivizēt **vienu** HA MQTT→Telegram
+   automatizāciju. Pārbaudīt dublikātu neesamību. Tikai ar
+   atsevišķu autorizāciju veikt vienu nekaitīgu Telegram paziņojuma
+   testu un pārliecināties par cilvēka redzētu piegādi.
+
+**Pārejas logs nav bezpārtraukuma garantija.** Starp vecā pollera
+apturēšanu un HA Polling ieslēgšanu Telegram komandas nav pieejamas;
+neatkarīgais HA/fiziskais STOP ceļš ir obligāts. Jebkurš negaidīts
+stāvoklis pēc pirmās LIVE mutation: **STOP**, bez automātiska
+atkārtota mēģinājuma vai pretējas aktuatora komandas.
+
+`main` firmware, HA UI vai GitHub avots viens pats nepierāda
+reāla releja/sūkņa/Telegram stāvokli. Šis PR **neautorizē**
+merge, HA konfigurāciju, MQTT publicēšanu, Telegram ziņu sūtīšanu,
+RPi5/ESP32 ierīces/hosta mutation vai Hermes 11:00 kontroliera izmaiņas.
+
+Oficiāli avoti:
+https://www.home-assistant.io/integrations/telegram_bot/ ;
+https://www.home-assistant.io/actions/telegram_bot.send_message/ ;
+https://www.home-assistant.io/integrations/switch.mqtt/ ;
+https://www.home-assistant.io/blog/2026/11/04/release-202611/ .

@@ -16,7 +16,7 @@ CONTROLLER = ROOT / "ops/bin/balcony-watering-autumn"
 
 SOURCE_ONLY = "SOURCE ONLY (#1490)"
 EVENT_TOPIC = "balkons/telegram_out"
-CHAT_ENTITY = "notify.replace_with_approved_telegram_chat"
+CHAT_ENTITY = "notify.andris"
 PAYLOAD_GUARD = (
     "{{ trigger.topic == 'balkons/telegram_out'\n"
     "           and trigger.payload is string\n"
@@ -159,7 +159,7 @@ class HANativeTelegramTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "native_reference_contract_changed"):
             validate_native_reference(
                 self.source.replace(
-                    "notify.replace_with_approved_telegram_chat",
+                    "notify.andris",
                     "notify.some_other_chat",
                 )
             )
@@ -174,7 +174,7 @@ class HANativeTelegramTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_native_reference(
                 self.source.replace(
-                    "        entity_id: notify.replace_with_approved_telegram_chat\n", ""
+                    "        entity_id: notify.andris\n", ""
                 )
             )
 
@@ -195,6 +195,66 @@ class HANativeTelegramTests(unittest.TestCase):
             validate_native_reference(
                 self.source + "\n- id: extra_unsafe\n  initial_state: false\n"
             )
+
+
+    def test_current_polling_cutover_supersedes_broadcast_only_retirement(self):
+        doc = (
+            ROOT / "docs/BALKONS_TELEGRAM_HA_NATIVE_SIMPLIFICATION.md"
+        ).read_text(encoding="utf-8")
+        marker = "## AKTUĀLĀ PĀRSLĒGŠANA — #1523 + #1525:"
+        self.assertEqual(doc.count(marker), 1)
+        current = doc.split(marker, 1)[1]
+        for invariant in (
+            "ops/homeassistant/balkons-telegram-polling-commands.yaml",
+            "ops/homeassistant/balkons-telegram-native-notify.yaml",
+            "Sūknis",
+            "balkons/sukna/komanda",
+            "balkons/sukna/stends",
+            "balkons/status",
+            "pl_off=OFF",
+            "notify.andris",
+            "divi Broadcast ieraksti",
+            "balkons/telegram_out",
+            "/stop",
+            "/mitrums",
+            "/statuss",
+            "/raw",
+            "/start",
+            "/laist",
+            "DENY",
+            "getUpdates",
+            "inactive/disabled",
+            "Composite STRICT LIVE",
+            "BLOCKED",
+            "STOP",
+        ):
+            self.assertIn(invariant, current)
+        self.assertIn("Telegram komandas nav pieejamas", current)
+        self.assertIn("neatkarīgais HA/fiziskais STOP ceļš", current)
+        self.assertNotIn("komandas nesaņem un neaizstāj", current)
+        self.assertNotIn("pēc bota izslēgšanas telegram", current.lower())
+
+    def test_notification_does_not_add_another_polling_client(self):
+        executable = "\n".join(
+            line for line in self.source.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("getUpdates", executable)
+        self.assertNotIn("telegram_command", executable)
+        self.assertNotIn("mqtt.publish", executable)
+        self.assertIn("entity_id: notify.andris", executable)
+
+    def test_simple_replacement_has_no_legacy_forwarder_or_command_action(self):
+        executable = "\n".join(
+            line for line in self.source.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+        self.assertIn("entity_id: notify.andris", executable)
+        self.assertNotIn("BALKONS_MQTT_TELEGRAM_FORWARD", executable)
+        self.assertNotIn("balkons/cmd", executable)
+        self.assertNotIn("mqtt.publish", executable)
+        self.assertNotIn("telegram_command", executable)
+        self.assertNotIn("getUpdates", executable)
 
 
 if __name__ == "__main__":
