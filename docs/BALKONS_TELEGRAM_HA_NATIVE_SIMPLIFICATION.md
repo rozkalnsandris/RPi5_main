@@ -189,3 +189,64 @@ paralēli esošajai RPi5 pārsūtīšanai.
 
 Nedz šis avots, nedz #1521 pilnais source darbs neautorizē HA/RPi5
 runtime darbības, Telegram/MQTT sūtīšanu vai aktuatoru komandas.
+
+## #1523 — Minimālais RPi5 paziņojumu pārslēgšanas drop-in (tikai avots)
+
+Avotā sagatavots `ops/systemd/balkons-bot-telegram-forward-off.conf` — **tikai**
+`Environment=BALKONS_MQTT_TELEGRAM_FORWARD=0` zem `[Service]`.
+Mērķis pēc atsevišķas LIVE atļaujas:
+`/etc/systemd/system/balkons-bot.service.d/96-balkons-telegram-forward-off.conf`.
+Šis fails tiek apstrādāts pēc esošā `95-rpi5-source-credentials.conf`;
+tas **nemaina** šifrēto credentials overlay, bot tokenu, polleri vai
+`balkons/cmd`. GitHub merge neinstalē ne drop-in, ne Python kodu.
+
+**Pirms jebkādas RPi5 pārstartēšanas obligāti:**
+
+1. Sanitizēts, atsevišķi autorizēts READONLY pārbaudījums: faktiskais
+   instalētais bota public source hash, servisa `active`/PID metadata,
+   `systemd` drop-in nosaukumi/precedence, precīzais paredzētais
+   `BALKONS_MQTT_TELEGRAM_FORWARD` statuss, HA MQTT connection,
+   automatizācijas disabled stāvoklis. Bez raw systemd/HA konfigurācijas,
+   env dump, credential satura vai tokeniem. Lokālais Git checkout
+   nav automātiski `origin/main`; vajadzīgs atsevišķs, autorizēts
+   clean `git fetch` + `merge --ff-only` un exact Git SHA preflight.
+2. **Neatkarīgs ārkārtas `stop` ceļš** bez RPi5 Telegram pollera,
+   piemēram, no īpašniekam pieejamā HA UI uz precīzo `balkons/cmd=stop`
+   (`retain=false`). Šī publikācija ir **fiziskas vadības LIVE
+   mutation**, nevis nekaitīgs smoke tests. Tikai pēc atsevišķas
+   konkrētas owner LIVE atļaujas un ESP32 apturēšanas semantikas,
+   aktuālas MQTT sasniedzamības un neatkarīgas ACK/ierīces drošības
+   verifikācijas drīkst uzskatīt rezervi par pierādītu. GitHub avots
+   nevar pierādīt ierīces reālo stāvokli. Ja pierādījuma nav, BLOCKED.
+3. Pārbaudīt, vai vēsturiskais #1484 one-shot Python atjaunināšanas
+   operators **patiesi** atbilst uzstādītā faila SHA, atļaujas receipt
+   un recovery preconditions. Ja nē — to **neizmantot atkārtoti**;
+   vajadzīgs atsevišķi pārskatīts, precīzi owner-autorizēts
+   public-source + drop-in instalācijas ceļš. Nedrīkst uzskatīt,
+   ka operatora esamība nozīmē, ka tas ir piemērots.
+
+**Nākotnes atļautā secība (neizpildīt no šī avota):** pēc drošās
+`stop` rezerves un dīkstāves pieļaujamības apliecināšanas, vienas
+precīzas Composite STRICT LIVE atļaujas ietvaros pārbaudīt clean source
+SHA un instalētos hash, uzstādīt pārskatīto bot Python avotu un **vienu**
+drop-in ar tikai šo mainīgo; `systemctl daemon-reload` un **vienu**
+`balkons-bot.service` restartu tikai tad, ja visi preconditions izpildīti.
+Pēc tam pārbaudīt reālo environment vērtību sanitizēti, MQTT
+notification SUBACK **neesamību** jaunajai paaudzei, saglabātu bot
+komandu polling/`/stop` un aizliegto `/laist*` gate.
+`No SUBACK` viens pats nav ekskluzivitātes pierādījums; jāpierāda
+arī faktiska neabonēšana un ne-forwarding. Ja rodas neskaidrība
+pēc pirmās mutation, STOP bez automātiska retry, rollback vai cleanup.
+
+Tikai **pēc** pierādītas vecā paziņojumu pārsūtītāja atspējošanas drīkst
+atsevišķi owner-autorizēti piesaistīt precīzo HA notify entītiju un
+ieslēgt **vienu** HA MQTT→Telegram automatizāciju. HA Broadcast
+neizveido otru `getUpdates` polleri. Pārejas logā iespējams
+paziņojumu iztrūkums, bet nekad nedrīkst apzināti atstāt divus
+aktīvus pārsūtītājus. Neviens šeit aprakstītais solis nav LIVE atļauja;
+11:00 Hermes, sūkņa un sensoru drošības politika netiek mainīta.
+
+Oficiālais `systemd` pamatojums: `systemd.unit(5)` drop-in faili
+tiek apstrādāti leksikogrāfiskā secībā, `systemd.exec(5)`
+vēlāks `Environment=` uzstādījums aizstāj agrāku; pirms LIVE tik
+un tā ir vajadzīga konkrētās vienības precedence pārbaude.

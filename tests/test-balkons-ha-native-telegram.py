@@ -74,6 +74,31 @@ def validate_native_reference(text: str) -> None:
         raise ValueError("native_reference_wildcard_topic")
 
 
+
+# This source-only drop-in is not installed or activated by the test suite.
+CUTOVER_DROPIN = ROOT / "ops/systemd/balkons-bot-telegram-forward-off.conf"
+
+
+def validate_forward_off_dropin(text: str) -> None:
+    """Reject anything besides one exact non-secret service environment value."""
+    if "\r" in text or "\x00" in text:
+        raise ValueError("forward_off_dropin_invalid_bytes")
+    effective = tuple(
+        line.strip() for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+    if effective != (
+        "[Service]",
+        "Environment=BALKONS_MQTT_TELEGRAM_FORWARD=0",
+    ):
+        raise ValueError("forward_off_dropin_extra_directive")
+    if any(token in text for token in (
+        "LoadCredential", "ExecStart", "ExecStop", "EnvironmentFile",
+        "PassEnvironment", "UnsetEnvironment", "mqtt.publish",
+        "balkons/cmd", "telegram-token", "mqtt-secret",
+    )):
+        raise ValueError("forward_off_dropin_forbidden_content")
+
 class HANativeTelegramTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -195,6 +220,42 @@ class HANativeTelegramTests(unittest.TestCase):
             validate_native_reference(
                 self.source + "\n- id: extra_unsafe\n  initial_state: false\n"
             )
+
+    def test_forward_off_dropin_exact_and_inert(self):
+        source = CUTOVER_DROPIN.read_text(encoding="utf-8")
+        validate_forward_off_dropin(source)
+        self.assertIn("SOURCE ONLY (#1523)", source)
+        self.assertIn("96-balkons-telegram-forward-off.conf", source)
+
+    def test_forward_off_dropin_rejects_unsafe_edits(self):
+        source = CUTOVER_DROPIN.read_text(encoding="utf-8")
+        for altered in (
+            source.replace("BALKONS_MQTT_TELEGRAM_FORWARD=0",
+                           "BALKONS_MQTT_TELEGRAM_FORWARD=1"),
+            source + "ExecStart=/bin/sh -c true\\n",
+            source + "Environment=EXTRA_VAR=anything\\n",
+            source + "Environment=\\n",
+            source + "LoadCredential=telegram-token:unsafe\\n",
+            source + "ExecStop=/usr/bin/systemctl restart balkons-bot.service\\n",
+        ):
+            with self.subTest(altered=altered[-75:]):
+                with self.assertRaises(ValueError):
+                    validate_forward_off_dropin(altered)
+
+    def test_forward_off_preserves_stop_and_fails_closed_against_duplication(self):
+        bot = BOT.read_text(encoding="utf-8")
+        self.assertIn(
+            'return os.environ.get("BALKONS_MQTT_TELEGRAM_FORWARD", "1") == "1"',
+            bot,
+        )
+        self.assertIn('if not _mqtt_notifications_enabled():\\n        return', bot)
+        self.assertIn('client.subscribe(T_OUT)', bot)
+        self.assertIn(
+            'elif text == "/stop":\\n        _publish_command_with_feedback("stop")',
+            bot,
+        )
+        self.assertIn('allowed, reason = _manual_watering_admission()', bot)
+
 
 
 if __name__ == "__main__":
