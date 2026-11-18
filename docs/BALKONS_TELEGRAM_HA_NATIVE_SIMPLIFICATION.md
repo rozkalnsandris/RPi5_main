@@ -1,5 +1,9 @@
 # Balkona Telegram: vienkāršāka Home Assistant integrācija (source only, #1490)
 
+**Pašreizējais vienkāršotais aizstāšanas lēmums:** skatīt apakšā sadaļu
+**AKTUĀLAIS LĒMUMS — #1523**. Agrākā #1490/#1521 komandu
+migrācija un #1521 opt-out apraksta vēsturiskos variantus.
+
 ## Lēmums
 
 **Mērķis:** Home Assistant `Telegram bot` + `MQTT` integrācijas, nevis
@@ -73,10 +77,10 @@ atspējots, opt-in automatizācijas paraugs**, kas:
 - Pieņem tikai netukšu un līdz 1024 zīmēm garu paziņojumu; uzlikts
   `mode: queued` ar ierobežotu rindu.
 - Apzināti satur `initial_state: false` un
-  `notify.replace_with_approved_telegram_chat` placeholder. Neviena
+  `notify.andris` saņēmēju (tikai pēc atkārtotas LIVE pārbaudes). Neviena
   tērzētava netiek automātiski minēta; īpašniekam jāpiesaista **precīza
-  atļautā Telegram notify entītija** pēc HA evidence. Kamēr placeholder
-  nav pārskatīts, šo paraugu nedrīkst aktivizēt.
+  atļautā Telegram notify entītija** pēc HA evidence. Kamēr saņēmējs nav revalidēts,
+  šo paraugu nedrīkst aktivizēt.
 - **Nesatur** `mqtt.publish`, `balkons/cmd` vadību, Telegram tokenu,
   REST pieprasījumus, skriptus vai sensoru stāvokļa izmaiņas.
 - Netiek automātiski importēts HA konfigurācijā: GitHub merge to
@@ -190,63 +194,62 @@ paralēli esošajai RPi5 pārsūtīšanai.
 Nedz šis avots, nedz #1521 pilnais source darbs neautorizē HA/RPi5
 runtime darbības, Telegram/MQTT sūtīšanu vai aktuatoru komandas.
 
-## #1523 — Minimālais RPi5 paziņojumu pārslēgšanas drop-in (tikai avots)
+## AKTUĀLAIS LĒMUMS — #1523: vienkārša aizstāšana (2026-11-18)
 
-Avotā sagatavots `ops/systemd/balkons-bot-telegram-forward-off.conf` — **tikai**
-`Environment=BALKONS_MQTT_TELEGRAM_FORWARD=0` zem `[Service]`.
-Mērķis pēc atsevišķas LIVE atļaujas:
-`/etc/systemd/system/balkons-bot.service.d/96-balkons-telegram-forward-off.conf`.
-Šis fails tiek apstrādāts pēc esošā `95-rpi5-source-credentials.conf`;
-tas **nemaina** šifrēto credentials overlay, bot tokenu, polleri vai
-`balkons/cmd`. GitHub merge neinstalē ne drop-in, ne Python kodu.
+Iepriekš aprakstītie #1490/#1521 divposmu migrācijas un paziņojumu
+`BALKONS_MQTT_TELEGRAM_FORWARD=0` drop-in varianti ir **vēsturiski**.
+Īpašnieks izvēlējās vienu vienkāršu ceļu:
 
-**Pirms jebkādas RPi5 pārstartēšanas obligāti:**
+**RPi5 `balkons-bot.service` pilnībā izslēgt, pēc tam ieslēgt vienu
+Home Assistant MQTT→Telegram Broadcast automatizāciju.** Nekāds
+Python bota atjauninājums, otrs polleris, pakalpojuma pārrakstīšana,
+drošības slēdža drop-in vai paralēla darbība nav nepieciešama.
 
-1. Sanitizēts, atsevišķi autorizēts READONLY pārbaudījums: faktiskais
-   instalētais bota public source hash, servisa `active`/PID metadata,
-   `systemd` drop-in nosaukumi/precedence, precīzais paredzētais
-   `BALKONS_MQTT_TELEGRAM_FORWARD` statuss, HA MQTT connection,
-   automatizācijas disabled stāvoklis. Bez raw systemd/HA konfigurācijas,
-   env dump, credential satura vai tokeniem. Lokālais Git checkout
-   nav automātiski `origin/main`; vajadzīgs atsevišķs, autorizēts
-   clean `git fetch` + `merge --ff-only` un exact Git SHA preflight.
-2. **Neatkarīgs ārkārtas `stop` ceļš** bez RPi5 Telegram pollera,
-   piemēram, no īpašniekam pieejamā HA UI uz precīzo `balkons/cmd=stop`
-   (`retain=false`). Šī publikācija ir **fiziskas vadības LIVE
-   mutation**, nevis nekaitīgs smoke tests. Tikai pēc atsevišķas
-   konkrētas owner LIVE atļaujas un ESP32 apturēšanas semantikas,
-   aktuālas MQTT sasniedzamības un neatkarīgas ACK/ierīces drošības
-   verifikācijas drīkst uzskatīt rezervi par pierādītu. GitHub avots
-   nevar pierādīt ierīces reālo stāvokli. Ja pierādījuma nav, BLOCKED.
-3. Pārbaudīt, vai vēsturiskais #1484 one-shot Python atjaunināšanas
-   operators **patiesi** atbilst uzstādītā faila SHA, atļaujas receipt
-   un recovery preconditions. Ja nē — to **neizmantot atkārtoti**;
-   vajadzīgs atsevišķi pārskatīts, precīzi owner-autorizēts
-   public-source + drop-in instalācijas ceļš. Nedrīkst uzskatīt,
-   ka operatora esamība nozīmē, ka tas ir piemērots.
+Šis ir tikai **paziņojumu** ceļš. Pēc bota izslēgšanas Telegram
+`/stop`, `/laist`, `/laist_2`, `/mitrums`, `/statuss`,
+`/raw` un `/start` **vairs nav pieejamas**. HA Broadcast
+komandas nesaņem un neaizstāj aktuatoru vadību. Pirms LIVE izslēgšanas
+īpašniekam jābūt neatkarīgam veidam, kā apturēt laistīšanu — bez vecā
+Telegram bota (piemēram, fiziska piekļuve vai atsevišķi verificēts
+HA MQTT `stop` ceļš). Ja nav iespējams apturēt sūkni, **neizslēgt**
+vadības botu. Nedrīkst pieņemt sūkņa stāvokli no GitHub koda.
 
-**Nākotnes atļautā secība (neizpildīt no šī avota):** pēc drošās
-`stop` rezerves un dīkstāves pieļaujamības apliecināšanas, vienas
-precīzas Composite STRICT LIVE atļaujas ietvaros pārbaudīt clean source
-SHA un instalētos hash, uzstādīt pārskatīto bot Python avotu un **vienu**
-drop-in ar tikai šo mainīgo; `systemctl daemon-reload` un **vienu**
-`balkons-bot.service` restartu tikai tad, ja visi preconditions izpildīti.
-Pēc tam pārbaudīt reālo environment vērtību sanitizēti, MQTT
-notification SUBACK **neesamību** jaunajai paaudzei, saglabātu bot
-komandu polling/`/stop` un aizliegto `/laist*` gate.
-`No SUBACK` viens pats nav ekskluzivitātes pierādījums; jāpierāda
-arī faktiska neabonēšana un ne-forwarding. Ja rodas neskaidrība
-pēc pirmās mutation, STOP bez automātiska retry, rollback vai cleanup.
+### Viena nākotnes LIVE pārslēgšana — nav šeit autorizēta
 
-Tikai **pēc** pierādītas vecā paziņojumu pārsūtītāja atspējošanas drīkst
-atsevišķi owner-autorizēti piesaistīt precīzo HA notify entītiju un
-ieslēgt **vienu** HA MQTT→Telegram automatizāciju. HA Broadcast
-neizveido otru `getUpdates` polleri. Pārejas logā iespējams
-paziņojumu iztrūkums, bet nekad nedrīkst apzināti atstāt divus
-aktīvus pārsūtītājus. Neviens šeit aprakstītais solis nav LIVE atļauja;
-11:00 Hermes, sūkņa un sensoru drošības politika netiek mainīta.
+1. **Sanitizēts read-only preflight.** Pārbaudīt HA MQTT savienojumu,
+   Broadcast saņēmēju `notify.andris` (tā vienreizējais Telegram tests
+   jau bija veiksmīgs, bet konfigurācija pirms LIVE jāpārbauda no jauna),
+   un ka otrā HA MQTT→Telegram automatizācija nav ieslēgta.
+   Pārbaudīt `balkons-bot.service` lifecycle metadata, neatklājot
+   tokenus/privātu konfigurāciju. Pārbaudīt neatkarīgo sūkņa
+   apturēšanas iespēju; bez tās **BLOCKED**.
+2. **Sagatavot HA automatizāciju izslēgtu** ar precīzo
+   `ops/homeassistant/balkons-telegram-native-notify.yaml` paraugu.
+   Tā joprojām ir GitHub atsauce, nevis live HA instalācija.
+   HA UI instalācijā nodrošināt, ka automātika ir OFF līdz 3. solim;
+   noņemt parauga `initial_state: false` pirms saglabāšanas, lai
+   pēc atkārtotas HA palaišanas ieslēgts statuss tiktu atjaunots.
+3. **Tikai ar jaunu precīzu Composite STRICT LIVE atļauju** RPi5
+   izpildīt vienu `systemctl disable --now balkons-bot.service`,
+   pēc tam read-only pārbaudīt `inactive` un `disabled`.
+   **Neatinstalēt** šifrētos credentials, servisa failus vai Python kodu.
+   Vecais Telegram komandu polleris pēc izslēgšanas vairs nav pieejams.
+   Ja rezultāts ir neskaidrs: STOP, bez automātiska retry/rollback.
+4. **Tikai pēc vecā servisa izslēgšanas** ar atsevišķi precīzi
+   autorizētu HA UI darbību ieslēgt **vienu** MQTT→
+   `telegram_bot.send_message` automatizāciju ar tēmu
+   `balkons/telegram_out`, adresātu `notify.andris`, 
+   `parse_mode: plain_text`. Pārbaudīt tās `on` stāvokli.
+   Pārejā iespējams īss paziņojumu iztrūkums; **nav paralēlu sūtītāju**.
+   Jebkurš tests, kas publicē MQTT, pat nekaitīgu paziņojumu, prasa
+   atsevišķu LIVE autorizāciju. Cilvēka redzētais Telegram paziņojums
+   ir gala piegādes pierādījums.
 
-Oficiālais `systemd` pamatojums: `systemd.unit(5)` drop-in faili
-tiek apstrādāti leksikogrāfiskā secībā, `systemd.exec(5)`
-vēlāks `Environment=` uzstādījums aizstāj agrāku; pirms LIVE tik
-un tā ir vajadzīga konkrētās vienības precedence pārbaude.
+Nedz `#1523` avota PR merge, nedz šī dokumentācija **nedod**
+LIVE tiesības uz RPi5/HA, sūkni, MQTT komandu vai Hermes kontrolieri.
+Esošie 11:00 laistīšanas noteikumi paliek neskarti.
+
+Dokumentācijas pamatojums: https://www.home-assistant.io/integrations/telegram_bot/ ,
+https://www.home-assistant.io/triggers/mqtt/ ,
+https://www.home-assistant.io/actions/telegram_bot.send_message/ ,
+https://www.home-assistant.io/docs/automation/yaml/ .
