@@ -141,6 +141,11 @@ def _start_telegram_sender() -> None:
         daemon=True,
     ).start()
 
+def _mqtt_notifications_enabled() -> bool:
+    """Only exact opt-in value 1 forwards MQTT notifications; absent is legacy ON."""
+    return os.environ.get("BALKONS_MQTT_TELEGRAM_FORWARD", "1") == "1"
+
+
 def _connected(client, reason_code) -> None:
     global _mqtt_subscribe_pending_mid
     # Reconnect invalidates any previous, unacknowledged subscription.
@@ -150,6 +155,9 @@ def _connected(client, reason_code) -> None:
         return
 
     print("MQTT connected", file=sys.stderr, flush=True)
+    if not _mqtt_notifications_enabled():
+        print("MQTT notification forwarding disabled", file=sys.stderr, flush=True)
+        return
     result, mid = client.subscribe(T_OUT)
     if result != mqtt.MQTT_ERR_SUCCESS:
         print("MQTT subscribe request rejected", file=sys.stderr, flush=True)
@@ -201,6 +209,8 @@ def on_connect_v1(client, userdata, flags, rc) -> None:
 
 def on_message(client, userdata, msg) -> None:
     del client, userdata
+    if not _mqtt_notifications_enabled():
+        return
     text = msg.payload.decode("utf-8", errors="replace")
     # The payload is intentionally delivered to the authorized Telegram chat,
     # but is not duplicated into the service journal.

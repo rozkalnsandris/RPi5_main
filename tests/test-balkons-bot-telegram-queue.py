@@ -21,7 +21,8 @@ TEXT = SOURCE.read_text(encoding="utf-8")
 TREE = ast.parse(TEXT)
 FUNCTION_NAMES = {
     "_send_telegram_now", "tg_send", "_telegram_sender_loop",
-    "_start_telegram_sender", "on_message", "_strict_json_object",
+    "_start_telegram_sender", "_mqtt_notifications_enabled",
+    "on_message", "_strict_json_object",
     "_connected", "_subscription_acknowledged", "on_subscribe_v1",
     "on_subscribe_v2",
     "_safety_state_max_age_s", "_manual_watering_admission",
@@ -151,6 +152,57 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(outbound.unfinished_tasks, 0)
         self.assertEqual(len(attempts), 1)
         self.assertEqual(errors, [("TG send error", "TimeoutError")])
+
+    def test_notification_forwarding_default_preserves_existing_bridge(self):
+        ns, outbound, _, _ = self.bridge()
+        with unittest.mock.patch.dict(os.environ, {}, clear=True):
+            self.assertTrue(ns["_mqtt_notifications_enabled"]())
+            with contextlib.redirect_stderr(io.StringIO()):
+                ns["_connected"](ns["_mqttc"], 0)
+            self.assertEqual(ns["_subscribe_calls"], ["balkons/telegram_out"])
+            ns["on_message"](None, None, types.SimpleNamespace(payload=b"normal"))
+        self.assertEqual(outbound.get_nowait()[0], "normal")
+
+    def test_opted_out_notifications_do_not_block_stop_command(self):
+        ns, outbound, publishes, _ = self.bridge()
+        with unittest.mock.patch.dict(os.environ, {"BALKONS_MQTT_TELEGRAM_FORWARD": "0"}):
+            with contextlib.redirect_stderr(io.StringIO()) as log:
+                ns["_connected"](ns["_mqttc"], 0)
+            self.assertIn("MQTT notification forwarding disabled", log.getvalue())
+            self.assertFalse(ns["_mqtt_notifications_enabled"]())
+            self.assertEqual(ns["_subscribe_calls"], [])
+            self.assertIsNone(ns["_mqtt_subscribe_pending_mid"])
+            # Even an unexpected queued callback cannot double-send a message.
+            ns["on_message"](None, None, types.SimpleNamespace(payload=b"not forwarded"))
+            self.assertEqual(outbound.qsize(), 0)
+            ns["handle_command"]("/stop")
+        self.assertEqual([item[0] for item in publishes], [("balkons/cmd", "stop")])
+
+    def test_invalid_forwarding_configuration_fails_closed(self):
+        for value in ("false", "true", "1 ", "", "2"):
+            with self.subTest(value=value):
+                ns, outbound, _, _ = self.bridge()
+                with unittest.mock.patch.dict(
+                    os.environ, {"BALKONS_MQTT_TELEGRAM_FORWARD": value}
+                ):
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        ns["_connected"](ns["_mqttc"], 0)
+                    ns["on_message"](
+                        None, None, types.SimpleNamespace(payload=b"no duplicate")
+                    )
+                self.assertEqual(ns["_subscribe_calls"], [])
+                self.assertTrue(outbound.empty())
+
+    def test_explicit_forwarding_enabled_keeps_legacy_behavior(self):
+        ns, outbound, _, _ = self.bridge()
+        with unittest.mock.patch.dict(
+            os.environ, {"BALKONS_MQTT_TELEGRAM_FORWARD": "1"}
+        ):
+            with contextlib.redirect_stderr(io.StringIO()):
+                ns["_connected"](ns["_mqttc"], 0)
+            ns["on_message"](None, None, types.SimpleNamespace(payload=b"enabled"))
+        self.assertEqual(ns["_subscribe_calls"], ["balkons/telegram_out"])
+        self.assertEqual(outbound.get_nowait()[0], "enabled")
 
     def test_subscribe_request_not_counted_as_broker_ack(self):
         ns, _, _, _ = self.bridge()
