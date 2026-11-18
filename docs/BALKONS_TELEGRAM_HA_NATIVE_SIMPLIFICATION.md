@@ -140,3 +140,52 @@ laistīšanas drošības gate saglabāšanu **GitHub kodā**.
 Šie testi nepierāda reālās HA instalācijas versiju vai Telegram integrācijas
 esamību. RPi5 nav mainīts. **READY SOURCE** nozīmē vienīgi gatavu
 pārskatāmu migrācijas avotu, nevis atļauju to lietot production.
+
+
+## #1521 — MQTT paziņojumu pārsūtīšanas atdalīšana (tikai GitHub avots)
+
+`ops/lib/balkons-bot.py` tagad paredz atsevišķu `BALKONS_MQTT_TELEGRAM_FORWARD`
+slēdzi. Ja vide nav konfigurēta vai vērtība ir precīzi `1`, darbojas
+pašreizējais pārsūtīšanas režīms. Tikai `0` ir paredzētā atspējošanas
+vērtība; jebkura cita neparedzēta vērtība **nepārsūta** MQTT paziņojumus
+(fail-closed pret dublikātiem). Kad pārsūtīšana nav atļauta, bots
+**neabonē** `balkons/telegram_out` un arī neapstrādā negaidīti saņemtu
+MQTT paziņojumu. Saņemtās Telegram komandas, `/stop`, manuālās
+laistīšanas drošības pārbaude un `balkons/cmd` nav mainīti.
+
+Šis ir **source-only** slēdzis. GitHub merge to neinstalē un nepārslēdz
+esošu servisu. Pašreizējais HA `Balkona Laistīšana` Broadcast serviss
+ir redzēts HA UI ar vienu entītiju, taču reālais Telegram saņēmējs un
+piegāde nav neatkarīgi pierādīti. Neaktivizēt otro MQTT patērētāju
+paralēli esošajai RPi5 pārsūtīšanai.
+
+### Viena nākotnes, atsevišķi autorizējama LIVE pārslēgšana
+
+1. **READONLY preflight:** identificēt precīzu HA `notify` entītiju,
+   atļauto Telegram sarunu, HA MQTT savienojumu un esošo automatizāciju
+   stāvokļus bez tokenu, chat ID vai privātās konfigurācijas kopēšanas.
+   Pārbaudīt `balkons-bot.service` versiju, aktīvo abonementu,
+   `/stop` komandas ceļu un iepriekš sagatavoto instalācijas
+   mehānismu. Nepieņemt, ka avota merge ir runtime izmaiņa.
+2. **Tikai ar atsevišķu precīzu COMPOSITE STRICT LIVE atļauju:**
+   droši uzstādīt pārskatīto bota avotu un iestatīt
+   `BALKONS_MQTT_TELEGRAM_FORWARD=0` tā servisa vidē. Tam var būt
+   vajadzīgs servisa restarts, kas uz brīdi pārtrauc komandu saņemšanu:
+   **neveikt**, ja pirms tam nav neatkarīgi nodrošināts drošs
+   `/stop` ceļš un apstiprināts pieļaujamais pārtraukums.
+   Pārbaudīt, ka botam vairs nav MQTT paziņojumu abonementa, bet
+   Telegram komandu saņemšana un vadības drošības gate strādā.
+3. Tikai pēc vecā pārsūtītāja izslēgšanas un komandu pārbaudes piesaistīt
+   jau sagatavotajai *vienai* HA automatizācijai precīzu atļauto
+   `notify` entītiju un aktivizēt to. Neizmantot otru `Polling`
+   klientu. Ja ekskluzivitāte vai `/stop` nav pierādīta, **STOP**.
+   Pārslēgšanas secība novērš divus vienlaicīgus sūtītājus, bet
+   negarantē bezpārtraukuma paziņojumu piegādi pārejas logā.
+4. Atsevišķi autorizēt ne vairāk kā vienu nekaitīgu paziņojumu
+   `balkons/telegram_out` (`qos=0`, `retain=false`) un pārbaudīt
+   cilvēka redzamo saņemšanu pareizajā Telegram sarunā. Bez
+   automātiska retry, rollback vai cleanup. 11:00 Hermes kontrolieris,
+   12 sensoru drošības loģika un sūknis nav šīs pārslēgšanas sastāvdaļa.
+
+Nedz šis avots, nedz #1521 pilnais source darbs neautorizē HA/RPi5
+runtime darbības, Telegram/MQTT sūtīšanu vai aktuatoru komandas.
