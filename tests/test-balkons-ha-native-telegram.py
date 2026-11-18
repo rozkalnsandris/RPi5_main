@@ -49,7 +49,7 @@ def validate_native_reference(text: str) -> None:
     if (len(re.findall(r"^- id:", text, flags=re.MULTILINE)) != 1
             or len(re.findall(r"^\s+- trigger:", text, flags=re.MULTILINE)) != 1
             or len(re.findall(r"^\s+- action:", text, flags=re.MULTILINE)) != 1
-            or text.count("initial_state:") != 1
+            or len(re.findall(r"^  initial_state:", text, re.MULTILINE)) != 1
             or len(re.findall(r"^\s+enabled: false$", text, re.MULTILINE)) != 2
             or re.search(r"^\s+enabled: true$", text, re.MULTILINE)
             or text.count("entity_id:") != 1):

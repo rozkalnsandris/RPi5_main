@@ -309,7 +309,7 @@ https://www.home-assistant.io/blog/2026/11/04/release-202611/ .
 
 ### HA UI INERT staging — precīzs ID un pirmais Save (2026-11-18)
 
-**Source-only, NAV HA instalācija.** Iepriekšējā
+**source-only, NAV HA instalācija.** Iepriekšējā
 `CREATE_DISABLED_ONCE ... NO_ENABLE` LIVE atļauja nebija izpildīta:
 HA `Save` netika veikts. Tā nepiešķir pilnvaras šim jaunajam procesam.
 
