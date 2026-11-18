@@ -74,8 +74,6 @@ def validate_native_reference(text: str) -> None:
         raise ValueError("native_reference_wildcard_topic")
 
 
-
-
 class HANativeTelegramTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -200,7 +198,9 @@ class HANativeTelegramTests(unittest.TestCase):
 
 
     def test_current_polling_cutover_supersedes_broadcast_only_retirement(self):
-        doc = (ROOT / "docs/BALKONS_TELEGRAM_HA_NATIVE_SIMPLIFICATION.md").read_text(encoding="utf-8")
+        doc = (
+            ROOT / "docs/BALKONS_TELEGRAM_HA_NATIVE_SIMPLIFICATION.md"
+        ).read_text(encoding="utf-8")
         marker = "## AKTUĀLĀ PĀRSLĒGŠANA — #1523 + #1525:"
         self.assertEqual(doc.count(marker), 1)
         current = doc.split(marker, 1)[1]
@@ -232,7 +232,7 @@ class HANativeTelegramTests(unittest.TestCase):
         self.assertIn("Telegram komandas nav pieejamas", current)
         self.assertIn("neatkarīgais HA/fiziskais STOP ceļš", current)
         self.assertNotIn("komandas nesaņem un neaizstāj", current)
-        self.assertNotIn("pēc bota izslēgšanas Telegram", current.lower())
+        self.assertNotIn("pēc bota izslēgšanas telegram", current.lower())
 
     def test_notification_does_not_add_another_polling_client(self):
         executable = "\n".join(
