@@ -159,10 +159,13 @@ class PollingSourceTests(unittest.TestCase):
     def test_no_network_or_credentials_in_offline_test(self):
         self.assertNotIn('payload: "laist"', self.source)
         self.assertNotIn("MQTT_PASSWORD", self.source)
-        code = Path(__file__).read_text(encoding="utf-8")
-        for term in ("requests.", "subprocess.", "os.system(",
-                     "urllib.request", "paho.mqtt", "socket."):
-            self.assertNotIn(term, code)
+        self.assertNotIn("api_key:", self.source)
+        self.assertNotIn("token:", self.source)
+        active = "\n".join(
+            line for line in self.source.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("getUpdates", active)
 
 
 if __name__ == "__main__":
