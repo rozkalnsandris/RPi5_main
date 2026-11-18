@@ -1,0 +1,90 @@
+# SOURCE ONLY (#1525): not installed; default disabled.
+# Replace event entity + chat/user identity placeholders PRIVATELY after LIVE approval.
+# Only one Telegram getUpdates poller per bot token (old RPi5 bot must stop first).
+- id: balkons_telegram_polling_commands_staged
+  alias: "Balkons: Telegram Polling commands (staged)"
+  description: "Source only. Manual watering is denied until HA safety parity is proven."
+  initial_state: false
+  triggers:
+    - trigger: state
+      entity_id: event.replace_with_verified_balkons_polling_event
+  conditions:
+    - condition: template
+      value_template: >-
+        {{ trigger.to_state is not none
+           and trigger.to_state.attributes.event_type == 'telegram_command'
+           and trigger.to_state.attributes.command is string
+           and (trigger.to_state.attributes.chat_id | string) == 'REPLACE_WITH_APPROVED_CHAT_ID'
+           and (trigger.to_state.attributes.user_id | string) == 'REPLACE_WITH_APPROVED_USER_ID'
+           and (trigger.to_state.attributes.args | default([], true) | length) == 0 }}
+  actions:
+    - choose:
+        # STOP is independent of every watering-admission gate.
+        # MQTT action acceptance is NOT ESP32 ACK or physical pump state.
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.attributes.command == '/stop' }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: "balkons/cmd"
+                payload: "stop"
+                qos: 0
+                retain: false
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.attributes.command == '/mitrums' }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: "balkons/cmd"
+                payload: "mitrums"
+                qos: 0
+                retain: false
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.attributes.command == '/statuss' }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: "balkons/cmd"
+                payload: "statuss"
+                qos: 0
+                retain: false
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.attributes.command == '/raw' }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: "balkons/cmd"
+                payload: "raw"
+                qos: 0
+                retain: false
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.attributes.command == '/start' }}"
+          sequence:
+            - action: telegram_bot.send_message
+              data:
+                entity_id: notify.andris
+                message: >-
+                  Balkona komandas: /stop, /mitrums, /statuss, /raw.
+                  Manuālā /laist pagaidām ir bloķēta.
+                parse_mode: plain_text
+        # /laist and every /laist_* command are DENIED until proven HA safety parity.
+        - conditions:
+            - condition: template
+              value_template: >-
+                {{ trigger.to_state.attributes.command == '/laist'
+                   or trigger.to_state.attributes.command[:7] == '/laist_' }}
+          sequence:
+            - action: telegram_bot.send_message
+              data:
+                entity_id: notify.andris
+                message: "Laistīšana bloķēta: HA drošības pārbaude nav ieviesta."
+                parse_mode: plain_text
+      default: []
+  # Parallel avoids serializing STOP behind another Telegram send.
+  mode: parallel
+  max: 10

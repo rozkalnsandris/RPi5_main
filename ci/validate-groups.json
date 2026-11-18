@@ -1112,6 +1112,10 @@
       ],
       [
         "python3",
+        "./tests/test-balkons-ha-polling-commands.py"
+      ],
+      [
+        "python3",
         "./tests/test-balkons-bot-latency-rollout.py"
       ],
       [
