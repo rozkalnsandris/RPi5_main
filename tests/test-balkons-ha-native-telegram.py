@@ -232,11 +232,11 @@ class HANativeTelegramTests(unittest.TestCase):
         for altered in (
             source.replace("BALKONS_MQTT_TELEGRAM_FORWARD=0",
                            "BALKONS_MQTT_TELEGRAM_FORWARD=1"),
-            source + "ExecStart=/bin/sh -c true\\n",
-            source + "Environment=EXTRA_VAR=anything\\n",
-            source + "Environment=\\n",
-            source + "LoadCredential=telegram-token:unsafe\\n",
-            source + "ExecStop=/usr/bin/systemctl restart balkons-bot.service\\n",
+            source + "ExecStart=/bin/sh -c true\n",
+            source + "Environment=EXTRA_VAR=anything\n",
+            source + "Environment=\n",
+            source + "LoadCredential=telegram-token:unsafe\n",
+            source + "ExecStop=/usr/bin/systemctl restart balkons-bot.service\n",
         ):
             with self.subTest(altered=altered[-75:]):
                 with self.assertRaises(ValueError):
@@ -248,10 +248,10 @@ class HANativeTelegramTests(unittest.TestCase):
             'return os.environ.get("BALKONS_MQTT_TELEGRAM_FORWARD", "1") == "1"',
             bot,
         )
-        self.assertIn('if not _mqtt_notifications_enabled():\\n        return', bot)
+        self.assertIn('if not _mqtt_notifications_enabled():\n        return', bot)
         self.assertIn('client.subscribe(T_OUT)', bot)
         self.assertIn(
-            'elif text == "/stop":\\n        _publish_command_with_feedback("stop")',
+            'elif text == "/stop":\n        _publish_command_with_feedback("stop")',
             bot,
         )
         self.assertIn('allowed, reason = _manual_watering_admission()', bot)
