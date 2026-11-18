@@ -199,6 +199,51 @@ class HANativeTelegramTests(unittest.TestCase):
             )
 
 
+    def test_current_polling_cutover_supersedes_broadcast_only_retirement(self):
+        doc = (ROOT / "docs/BALKONS_TELEGRAM_HA_NATIVE_SIMPLIFICATION.md").read_text(encoding="utf-8")
+        marker = "## AKTUĀLĀ PĀRSLĒGŠANA — #1523 + #1525:"
+        self.assertEqual(doc.count(marker), 1)
+        current = doc.split(marker, 1)[1]
+        for invariant in (
+            "ops/homeassistant/balkons-telegram-polling-commands.yaml",
+            "ops/homeassistant/balkons-telegram-native-notify.yaml",
+            "Sūknis",
+            "balkons/sukna/komanda",
+            "balkons/sukna/stends",
+            "balkons/status",
+            "pl_off=OFF",
+            "notify.andris",
+            "divi Broadcast ieraksti",
+            "balkons/telegram_out",
+            "/stop",
+            "/mitrums",
+            "/statuss",
+            "/raw",
+            "/start",
+            "/laist",
+            "DENY",
+            "getUpdates",
+            "inactive/disabled",
+            "Composite STRICT LIVE",
+            "BLOCKED",
+            "STOP",
+        ):
+            self.assertIn(invariant, current)
+        self.assertIn("Telegram komandas nav pieejamas", current)
+        self.assertIn("neatkarīgais HA/fiziskais STOP ceļš", current)
+        self.assertNotIn("komandas nesaņem un neaizstāj", current)
+        self.assertNotIn("pēc bota izslēgšanas Telegram", current.lower())
+
+    def test_notification_does_not_add_another_polling_client(self):
+        executable = "\n".join(
+            line for line in self.source.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("getUpdates", executable)
+        self.assertNotIn("telegram_command", executable)
+        self.assertNotIn("mqtt.publish", executable)
+        self.assertIn("entity_id: notify.andris", executable)
+
     def test_simple_replacement_has_no_legacy_forwarder_or_command_action(self):
         executable = "\n".join(
             line for line in self.source.splitlines()
