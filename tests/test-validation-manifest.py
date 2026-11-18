@@ -34,7 +34,7 @@ for group in EXPECTED_GROUPS:
         assert "-c" not in argv
         commands.append(tuple(argv))
 
-assert len(commands) == 318
+assert len(commands) == 319
 assert len(set(commands)) == len(commands)
 
 for argv in commands:
