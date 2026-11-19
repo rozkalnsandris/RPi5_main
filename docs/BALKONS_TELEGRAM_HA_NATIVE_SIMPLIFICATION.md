@@ -326,26 +326,33 @@ https://www.home-assistant.io/docs/automation/yaml/ ;
 https://www.home-assistant.io/docs/automation/trigger/ ;
 https://www.home-assistant.io/docs/automation/building-blocks/ .
 
-**Precīzs entītijas ID.** `id: balkons_telegram_native_notification_staged`
-ir unikālais HA konfigurācijas ID; tas NAV HA `entity_id`.
-`alias: "balkons_telegram_native_notification_staged"`
-atbilst mērķa slugam
-`automation.balkons_telegram_native_notification_staged`,
-bet sadursmes vai reģistra vēsture var dot citu ID.
-Tāpēc pirms Save jāpārbauda, ka ID/alias nav jau aizņemts,
-un pēc Save jāverificē reālais `entity_id` bez automātiskas
-pārdēvēšanas.
+**Jaunas HA UI automatizācijas ID.** GitHub YAML atsaucē ir
+`id: balkons_telegram_native_notification_staged`, taču tas ir
+**source-only saraksta ID**, kas NAV jākopē jaunas HA UI
+automatizācijas YAML redaktorā. HA UI pats ģenerē ID pirmajā Save.
+Manuāla ID ievietošana jaunas automatizācijas YAML var izjaukt
+UI un saglabātā ieraksta sasaisti.
+`alias: "balkons_telegram_native_notification_staged"` paliek
+nemainīts, lai atbilstu vēlamajam
+`automation.balkons_telegram_native_notification_staged` slugam.
+Faktisko `entity_id` nosaka HA reģistrs, nevis alias vien.
+Pirms Save pārbauda mērķa entītijas neesamību;
+pēc Save pārbauda HA ģenerēto ID un faktisko entity ID.
+Nesakritības gadījumā STOP bez automātiskas pārdēvēšanas.
 
 **Tikai ar JAUNU Composite STRICT LIVE atļauju:**
 
-1. HA UI YAML editorā izveidot **vienu mapping** no GitHub
-   viena elementa YAML saraksta. No `- id:` noņemt saraksta
-   `- ` un visām augšējā līmeņa rindām noņemt divas
-   atstarpes; nedrīkst ielīmēt visu YAML sarakstu kā vienu map.
-2. PIRMS Save pārbaudīt `id`, `alias`, `initial_state: false`,
-   precīzo `balkons/telegram_out` MQTT trigeri, `notify.andris`,
-   vienu Telegram send action, abus `enabled: false`, payload
-   ierobežojumu, plain text un nekādu citu darbību.
+1. HA **New automation** YAML editorā izveidot **vienu mapping**
+   no GitHub viena elementa saraksta. Pilnībā **IZLAIST** pirmo
+   `- id: balkons_telegram_native_notification_staged` rindu;
+   katrai pārējai YAML rindai noņemt divas atkāpes atstarpes.
+   Jaunā UI mapā **NAV `id:` atslēgas**: HA pats ģenerēs ID.
+2. PIRMS Save pārbaudīt, ka `id:` atslēga NAV ievadīta,
+   ka saglabāts precīzs `alias` un `initial_state: false`,
+   `balkons/telegram_out` MQTT trigeris ar `enabled: false`,
+   vienīgais `telegram_bot.send_message` action ar `enabled: false`,
+   `notify.andris`, payload robeža un plain text.
+   Citu darbību vai trigeru nav.
 3. **GUI first-save var īslaicīgi izveidot automatizācijas entity ON.**
    Vecā `NO_ENABLE` atļauja šādu Save neatļauj. Vajadzīga
    jauna īpašnieka atļauja inert CREATE + iespējamu vienreizēju
@@ -364,3 +371,44 @@ pārdēvēšanas.
 
 Šis staging ir **bez Telegram sūtīšanas**, MQTT publikācijām,
 sūkņa komandām, RPi5 servisa apturēšanas un pārējām LIVE izmaiņām.
+
+
+### HA UI Save atteikums — bez manuālā ID (2026-11-19)
+
+Novērots viens autorizēts Save ar manuāli ielīmētu YAML
+rindu `id: balkons_telegram_native_notification_staged`.
+Pēc Save adrese bija `/config/automation/edit/1795095339888`,
+bet dialogs ziņoja: `Only automations in automations.yaml are editable.`
+READONLY pārbaudē aktīvā HA `configuration.yaml` ietvēra
+`automation: !include automations.yaml`, un HA konteineram
+piesaistītajā aktīvajā `automations.yaml` ieraksts ar
+ID `1795095339888` nebija atrodams.
+Iekšējā Save kļūdas pieraksts nav iegūts: konkrētais cēlonis
+nav pierādīts. Bez jaunas atļaujas netika veikts retry vai cleanup.
+
+HA dokumentācija norāda, ka jaunas UI automatizācijas ID
+tiek ģenerēts automātiski. Home Assistant frontend issue #22395
+apraksta automatizācijas pazušanu pēc manuālas `id` ievietošanas
+YAML editorā. Tāpēc pareizotais plāns jaunas UI automatizācijas
+YAML **neiekļauj `id:`**. Tas ir ticams risinājums, nevis
+pierādīts iepriekšējās Save kļūdas novēršanas rezultāts.
+
+Avoti: https://www.home-assistant.io/docs/automation/yaml/ ;
+https://www.home-assistant.io/docs/automation/troubleshooting/ ;
+https://github.com/home-assistant/frontend/issues/22395 .
+
+Šis ir source-only labojums, NEVIS LIVE atļauja. Pēc atsevišķas
+Composite STRICT LIVE autorizācijas pirms viena Save jāverificē
+bez-ID UI YAML, `alias`, `initial_state: false`, vienīgais
+MQTT trigeris `enabled: false`, vienīgais Telegram send action
+`enabled: false`, tēma `balkons/telegram_out` un `notify.andris`.
+HA ģenerētais ID un faktiskais entity ID jāverificē read-only.
+Ja paredzētais sākotnējais ON, tikai tajā pašā iepriekš
+autorizētajā kompozītajā darbībā drīkst vienreiz Disable un
+pārbaudīt OFF. Pārējos gadījumos STOP.
+
+Ja Save atgriež kļūdu, parādās ID drifts, trūkst entītijas
+vai ir cits neparedzēts stāvoklis: **STOP** bez retry,
+rollback, reload, rename, cleanup, faila rediģēšanas vai
+citas LIVE mutation. Savākt tikai read-only pierādījumus.
+Nesūtīt Telegram, nepublicēt MQTT, neapturēt veco botu.
