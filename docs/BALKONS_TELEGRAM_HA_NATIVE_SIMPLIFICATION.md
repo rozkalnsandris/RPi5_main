@@ -412,3 +412,21 @@ vai ir cits neparedzēts stāvoklis: **STOP** bez retry,
 rollback, reload, rename, cleanup, faila rediģēšanas vai
 citas LIVE mutation. Savākt tikai read-only pierādījumus.
 Nesūtīt Telegram, nepublicēt MQTT, neapturēt veco botu.
+
+
+### Polling inertā staging source turpinājums (2026-11-19)
+
+`ops/homeassistant/balkons-telegram-polling-commands.yaml` ir
+tikai GitHub source. Trīs aizsargi: `initial_state: false`,
+`state` trigger `enabled: false`, `choose` action `enabled: false`.
+Jaunam HA UI Save izlaist atsauces `- id:` (HA ģenerēs ID).
+Neuzskatīt `event`/`chat_id`/`user_id` placeholder par pārbaudītu
+identitāti. Pirms LIVE šie dati jāpārbauda privāti; publiskā
+GitHub ID neievietot. Veco `balkons-bot.service` neaiztikt.
+
+Turpinājumam vajag atsevišķu Composite STRICT LIVE owner
+atļauju tikai pēc Polling identitātes, atļauto sūtītāju un
+neatkarīgā STOP pārbaudes. Pirmais Save var izveidot entity
+ON; vienreizēju Disable atļauj tikai precīza kompozītā
+autorizācija. Kļūdu gadījumā STOP bez retry/rollback/cleanup.
+Skat. `docs/BALKONS_HA_POLLING_COMMANDS_SOURCE_ONLY.md`.

@@ -31,9 +31,9 @@ def validate_contract(source: str) -> None:
     )
     for item in (
         "SOURCE ONLY (#1525)", "- id: balkons_telegram_polling_commands_staged",
-        "  initial_state: false\n", "    - trigger: state\n",
+        "  initial_state: false\n", "    - trigger: state\n      enabled: false\n",
         "      entity_id: event.replace_with_verified_balkons_polling_event\n",
-        "    - choose:\n", "      default: []\n",
+        "    - choose:\n", "      default: []\n      enabled: false\n",
         "  mode: parallel\n", "  max: 10\n",
     ):
         if item not in source:
@@ -44,6 +44,7 @@ def validate_contract(source: str) -> None:
         ("- id:", 1), ("trigger: state", 1), ("initial_state:", 1),
         ("entity_id: event.", 1), ("choose:", 1), ("default: []", 1),
         ("mode: parallel", 1), ("max: 10", 1),
+        ("enabled: false", 2),
     ):
         if active.count(value) != expected:
             raise ValueError("extra_automation_or_trigger")
@@ -104,6 +105,45 @@ class PollingSourceTests(unittest.TestCase):
     def test_staged_contract(self):
         validate_contract(self.source)
 
+    def test_inert_staging_guards_are_mandatory(self):
+        self.assertIn("  initial_state: false\n", self.source)
+        for fragment in (
+            "    - trigger: state\n      enabled: false\n",
+            "      default: []\n      enabled: false\n",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
+                for new in (fragment.replace("enabled: false", "enabled: true"),
+                            fragment.replace("enabled: false\n", "")):
+                    with self.assertRaises(ValueError):
+                        validate_contract(self.source.replace(fragment, new))
+        self.assertEqual(self.source.count("enabled: false"), 2)
+
+    def test_new_ha_ui_mapping_excludes_source_only_id(self):
+        entries = [line for line in self.source.splitlines()
+                   if line.strip() and not line.lstrip().startswith("#")]
+        self.assertEqual(entries[0], "- id: balkons_telegram_polling_commands_staged")
+        self.assertTrue(all(line.startswith("  ") for line in entries[1:]))
+        ui = "\n".join(line[2:] for line in entries[1:]) + "\n"
+        self.assertNotRegex(ui, r"(?m)^\s*id:")
+        self.assertIn("initial_state: false", ui)
+        self.assertIn("  - trigger: state\n    enabled: false\n", ui)
+        self.assertIn("    default: []\n    enabled: false\n", ui)
+        self.assertIn("REPLACE_WITH_APPROVED_CHAT_ID", ui)
+        self.assertIn("REPLACE_WITH_APPROVED_USER_ID", ui)
+        self.assertEqual(ui.count("enabled: false"), 2)
+
+    def test_inert_staging_runbook_guardrails(self):
+        doc = (ROOT / "docs/BALKONS_HA_POLLING_COMMANDS_SOURCE_ONLY.md").read_text(
+            encoding="utf-8")
+        marker = "## HA UI inertā sagatavošana (source only, 2026-11-19)"
+        self.assertEqual(doc.count(marker), 1)
+        for token in (
+            "initial_state: false", "enabled: false", "bez `id:`",
+            "Composite STRICT LIVE", "chat_id", "user_id",
+            "STOP", "bez retry", "getUpdates", "NO MQTT publish",
+        ):
+            self.assertIn(token, doc.split(marker, 1)[1])
     def test_existing_bot_and_notification_parity(self):
         bot = BOT.read_text(encoding="utf-8")
         notify = NOTIFY.read_text(encoding="utf-8")

@@ -11,7 +11,9 @@
 
 ## Sagatavotais risinājums
 
-`ops/homeassistant/balkons-telegram-polling-commands.yaml` ir **viena izslēgta** HA automatizācijas atsauce (`initial_state: false`), nevis uzinstalēta Polling integrācija.
+`ops/homeassistant/balkons-telegram-polling-commands.yaml` ir **viena inertā** HA automatizācijas atsauce (`initial_state: false`,
+viens `state` trigeris ar `enabled: false` un galvenā `choose` darbība
+ar `enabled: false`), nevis uzinstalēta Polling integrācija.
 
 Pirms owner-autorizētas LIVE izmaiņas HA UI **privāti** jāaizstāj `event.replace_with_verified_balkons_polling_event` ar reālu Telegram Polling event entity un `REPLACE_WITH_APPROVED_CHAT_ID` / `REPLACE_WITH_APPROVED_USER_ID` ar pareizu sūtītāja identitāti. Neievietot identifikatorus publiskā GitHub. `notify.andris` ir iepriekš izmēģināta entītija, bet pēc Polling pārkonfigurācijas jāpārbauda atkārtoti.
 
@@ -40,3 +42,42 @@ Pašreizējā RPi5 `manual-safety-v1.json` admission prasa aktuālu (ne vecāku 
 3. Tikai pēc owner atļaujas un privāto datu/avārijas STOP ceļa pārbaudes ieslēgt vienu komandautomatizāciju, nepārkāpjot MQTT/aktuatora drošības robežu. `/laist*` paliek bloķēta. Pēc neskaidras pirmās mutation — STOP bez retry/rollback/cleanup.
 
 **Merge nav LIVE.** Šis source darba posms neietver HA konfigurācijas maiņu, Telegram sūtīšanu, MQTT publish, RPi5 servisu apturēšanu, credentials, Hermes, ESP32 firmware vai sūkņa komandas.
+
+
+## HA UI inertā sagatavošana (source only, 2026-11-19)
+
+Šis ir tikai GitHub source, nevis HA instalācija vai LIVE atļauja.
+READONLY preflight redzēja Telegram Broadcast servisus, bet
+neverificēja Polling event entītiju. Vecais `balkons-bot.service`
+bija `active/running/enabled`; neveidot otru `getUpdates` klientu.
+
+Trīs neatkarīgi aizsargi: `initial_state: false`, vienīgais
+`state` trigeris `enabled: false`, galvenā `choose` darbība
+`enabled: false`. Pēdējā neļauj izpildīt MQTT vai Telegram
+darbības arī ar HA `Run actions` (kas apiet trigeri).
+
+Jaunai HA UI automation veido vienu YAML mapping **bez `id:`**:
+pilnībā izlaist GitHub `- id:` rindu, atlikušajām rindām
+noņemt divas atkāpes atstarpes; HA piešķir ģenerētu ID.
+**Šis source nav gatavs LIVE instalācijai ar placeholder datiem.**
+Privāti jāpārbauda pareizā Telegram Polling `event` entītija,
+atļautā `chat_id` un `user_id`, kā arī `notify.andris` piesaiste.
+Reālās vērtības aizstāj tikai precīzi autorizētā HA UI darbībā,
+nekad publiskā GitHub. Neieslēgt otro `getUpdates` klientu.
+
+Tikai ar jaunu **Composite STRICT LIVE** owner atļauju drīkst
+vienu inertā stāvoklī izveidotu automation saglabāt HA UI.
+Pirms Save verificēt bez-ID mapu, trīs aizsargus, privātos
+identitātes filtrus, nemainīgus `/laist*` DENY un fiksētus
+MQTT maršrutus. Pēc Save read-only pārbaudīt HA ģenerēto ID,
+faktisko entity ID, Automation OFF un abus `enabled: false`.
+Ja sākumā ON, drīkst vienreiz Disable tikai šīs atļaujas ietvaros.
+
+Pie kļūdas, ID konflikta vai timeout: **STOP, bez retry**,
+rollback, cleanup vai alternatīvas LIVE mutation.
+**NO MQTT publish**, Telegram sūtīšana, bota apturēšana,
+Polling pārslēgšana un sūkņa/ESP32 izmaiņas nav autorizētas.
+
+Home Assistant: https://www.home-assistant.io/docs/automation/trigger/ ;
+https://www.home-assistant.io/docs/automation/building-blocks/ ;
+https://www.home-assistant.io/docs/automation/yaml/ .
