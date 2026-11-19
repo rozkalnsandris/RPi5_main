@@ -176,6 +176,44 @@ class HANativeTelegramTests(unittest.TestCase):
         ):
             self.assertIn(required, current)
 
+    def test_new_ui_automation_mapping_omits_source_reference_id(self):
+        executable = [
+            line for line in self.source.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        self.assertEqual(
+            executable[0],
+            "- id: balkons_telegram_native_notification_staged",
+        )
+        self.assertTrue(all(line.startswith("  ") for line in executable[1:]))
+        ui_text = "\n".join(line[2:] for line in executable[1:]) + "\n"
+        self.assertTrue(ui_text.startswith(
+            'alias: "balkons_telegram_native_notification_staged"\n'
+        ))
+        self.assertNotRegex(ui_text, r"(?m)^\s*id:")
+        self.assertIn("initial_state: false", ui_text)
+        self.assertIn("  - trigger: mqtt\n    enabled: false\n", ui_text)
+        self.assertIn("  - action: telegram_bot.send_message\n    enabled: false\n", ui_text)
+        self.assertIn("entity_id: notify.andris", ui_text)
+        self.assertEqual(ui_text.count("enabled: false"), 2)
+        self.assertNotIn("mqtt.publish", ui_text)
+
+    def test_save_rejection_runbook_requires_generated_id(self):
+        doc = (ROOT / "docs/BALKONS_TELEGRAM_HA_NATIVE_SIMPLIFICATION.md").read_text(
+            encoding="utf-8"
+        )
+        marker = "### HA UI Save atteikums — bez manuālā ID"
+        self.assertEqual(doc.count(marker), 1)
+        section = doc.split(marker, 1)[1]
+        for required in (
+            "1795095339888", "Only automations in automations.yaml are editable.",
+            "automation: !include automations.yaml", "frontend issue #22395",
+            "nav pierādīts", "neiekļauj `id:`", "STOP", "bez retry",
+            "enabled: false", "initial_state: false", "notify.andris",
+        ):
+            self.assertIn(required, section)
+        self.assertIn("Pilnībā **IZLAIST**", doc)
+        self.assertIn("**NAV `id:` atslēgas**", doc)
     def test_extra_action_rejected(self):
         with self.assertRaises(ValueError):
             validate_native_reference(

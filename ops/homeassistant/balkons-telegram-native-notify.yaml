@@ -14,7 +14,8 @@
 # Keep this disabled until the old MQTT forwarding consumer is inactive.
 # On first HA UI save, initial_state: false does not guarantee entity OFF.
 # Inert by default: disable both the MQTT trigger and Telegram send action.
-# UI requires a mapping, not this one-element YAML list; see runbook.
+# NEW HA UI: omit the source-only id; Home Assistant generates its own ID.
+# Convert remaining list content to one UI mapping; see the current runbook.
 - id: balkons_telegram_native_notification_staged
   alias: "balkons_telegram_native_notification_staged"
   description: "Source-only inert staging; trigger and send action disabled."
