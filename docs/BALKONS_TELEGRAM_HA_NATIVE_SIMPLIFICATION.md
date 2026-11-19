@@ -305,3 +305,62 @@ https://www.home-assistant.io/integrations/telegram_bot/ ;
 https://www.home-assistant.io/actions/telegram_bot.send_message/ ;
 https://www.home-assistant.io/integrations/switch.mqtt/ ;
 https://www.home-assistant.io/blog/2026/11/04/release-202611/ .
+
+
+### HA UI INERT staging — precīzs ID un pirmais Save (2026-11-18)
+
+**source-only, NAV HA instalācija.** Iepriekšējā
+`CREATE_DISABLED_ONCE ... NO_ENABLE` LIVE atļauja nebija izpildīta:
+HA `Save` netika veikts. Tā nepiešķir pilnvaras šim jaunajam procesam.
+
+`initial_state: false` nosaka HA automatizācijas stāvokli
+**startēšanas** laikā, nevis garantē, ka GUI first-save uzreiz izveido
+entity `OFF`. Tāpēc source ir trīs neatkarīgi drošības slāņi:
+`initial_state: false`, vienīgais MQTT trigger
+`enabled: false`, un vienīgais `telegram_bot.send_message`
+action `enabled: false`. Ne MQTT trigeris, ne atspējotā
+sūtīšanas darbība nevar nosūtīt Telegram ziņu.
+Avots arī neietver `mqtt.publish` vai sūkņa komandu.
+Oficiālie avoti:
+https://www.home-assistant.io/docs/automation/yaml/ ;
+https://www.home-assistant.io/docs/automation/trigger/ ;
+https://www.home-assistant.io/docs/automation/building-blocks/ .
+
+**Precīzs entītijas ID.** `id: balkons_telegram_native_notification_staged`
+ir unikālais HA konfigurācijas ID; tas NAV HA `entity_id`.
+`alias: "balkons_telegram_native_notification_staged"`
+atbilst mērķa slugam
+`automation.balkons_telegram_native_notification_staged`,
+bet sadursmes vai reģistra vēsture var dot citu ID.
+Tāpēc pirms Save jāpārbauda, ka ID/alias nav jau aizņemts,
+un pēc Save jāverificē reālais `entity_id` bez automātiskas
+pārdēvēšanas.
+
+**Tikai ar JAUNU Composite STRICT LIVE atļauju:**
+
+1. HA UI YAML editorā izveidot **vienu mapping** no GitHub
+   viena elementa YAML saraksta. No `- id:` noņemt saraksta
+   `- ` un visām augšējā līmeņa rindām noņemt divas
+   atstarpes; nedrīkst ielīmēt visu YAML sarakstu kā vienu map.
+2. PIRMS Save pārbaudīt `id`, `alias`, `initial_state: false`,
+   precīzo `balkons/telegram_out` MQTT trigeri, `notify.andris`,
+   vienu Telegram send action, abus `enabled: false`, payload
+   ierobežojumu, plain text un nekādu citu darbību.
+3. **GUI first-save var īslaicīgi izveidot automatizācijas entity ON.**
+   Vecā `NO_ENABLE` atļauja šādu Save neatļauj. Vajadzīga
+   jauna īpašnieka atļauja inert CREATE + iespējamu vienreizēju
+   Disable. Ja atļaujas nav — **BLOCKED**, Save neveikt.
+4. Pēc viena Save tikai read-only pārbaudīt precīzu HA entity
+   un abu atsevišķo slēdžu statusu. Ja redzams paredzētais
+   sākotnējais `ON`, vienreiz Disable drīkst veikt tikai šīs
+   iepriekš autorizētās kompozītās darbības ietvaros.
+   Pēc tam verificēt `OFF`. Ja entity ID atšķiras,
+   ir kļūda, timeout vai cita neskaidrība: **STOP**,
+   bez retry, rollback, rename vai cleanup.
+5. Sūtīšanas action un MQTT trigeris ar `enabled: false`
+   jāatstāj inertā stāvoklī arī tad, kad pati automation
+   ir `OFF`. To vēlāk maina tikai atsevišķi autorizētā
+   cutover, pārbaudot vecā bota MQTT patērētāja apturēšanu.
+
+Šis staging ir **bez Telegram sūtīšanas**, MQTT publikācijām,
+sūkņa komandām, RPi5 servisa apturēšanas un pārējām LIVE izmaiņām.

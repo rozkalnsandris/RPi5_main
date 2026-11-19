@@ -12,12 +12,16 @@
 # Before retiring the old RPi5 bot, verify an independent physical/HA STOP path.
 # Only one Telegram Polling receiver per bot token; verify exact bot/notify mapping.
 # Keep this disabled until the old MQTT forwarding consumer is inactive.
+# On first HA UI save, initial_state: false does not guarantee entity OFF.
+# Inert by default: disable both the MQTT trigger and Telegram send action.
+# UI requires a mapping, not this one-element YAML list; see runbook.
 - id: balkons_telegram_native_notification_staged
-  alias: "Balkons: MQTT notification to native Telegram (staged)"
-  description: "Disabled HA 2026.11 reference; not a deployment instruction."
+  alias: "balkons_telegram_native_notification_staged"
+  description: "Source-only inert staging; trigger and send action disabled."
   initial_state: false
   triggers:
     - trigger: mqtt
+      enabled: false
       topic: "balkons/telegram_out"
       qos: 0
   conditions:
@@ -28,6 +32,7 @@
            and 0 < (trigger.payload | length) <= 1024 }}
   actions:
     - action: telegram_bot.send_message
+      enabled: false
       data:
         # Owner-tested HA notify entity; reconfirm it before LIVE cutover.
         entity_id: notify.andris

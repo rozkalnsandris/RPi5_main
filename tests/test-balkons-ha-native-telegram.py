@@ -30,12 +30,13 @@ def validate_native_reference(text: str) -> None:
         SOURCE_ONLY,
         "- id: balkons_telegram_native_notification_staged",
         "  initial_state: false\n",
-        "    - trigger: mqtt\n",
+        '  alias: "balkons_telegram_native_notification_staged"\n',
+        "    - trigger: mqtt\n      enabled: false\n",
         f'      topic: "{EVENT_TOPIC}"\n',
         "      qos: 0\n",
         "    - condition: template\n",
         PAYLOAD_GUARD,
-        "    - action: telegram_bot.send_message\n",
+        "    - action: telegram_bot.send_message\n      enabled: false\n",
         f"        entity_id: {CHAT_ENTITY}\n",
         '        message: "{{ trigger.payload }}"\n',
         "        parse_mode: plain_text\n",
@@ -48,7 +49,9 @@ def validate_native_reference(text: str) -> None:
     if (len(re.findall(r"^- id:", text, flags=re.MULTILINE)) != 1
             or len(re.findall(r"^\s+- trigger:", text, flags=re.MULTILINE)) != 1
             or len(re.findall(r"^\s+- action:", text, flags=re.MULTILINE)) != 1
-            or text.count("initial_state:") != 1
+            or len(re.findall(r"^  initial_state:", text, re.MULTILINE)) != 1
+            or len(re.findall(r"^\s+enabled: false$", text, re.MULTILINE)) != 2
+            or re.search(r"^\s+enabled: true$", text, re.MULTILINE)
             or text.count("entity_id:") != 1):
         raise ValueError("native_reference_extra_action")
     # Restrict the actual YAML (not comments). There can be no actuator or
@@ -135,6 +138,43 @@ class HANativeTelegramTests(unittest.TestCase):
             validate_native_reference(
                 self.source.replace("initial_state: false", "initial_state: true")
             )
+
+    def test_inert_trigger_and_action_must_stay_disabled(self):
+        for fragment in (
+            "    - trigger: mqtt\n      enabled: false\n",
+            "    - action: telegram_bot.send_message\n      enabled: false\n",
+        ):
+            with self.subTest(fragment=fragment):
+                with self.assertRaises(ValueError):
+                    validate_native_reference(
+                        self.source.replace(
+                            fragment, fragment.replace("enabled: false", "enabled: true"),
+                        )
+                    )
+
+    def test_alias_matches_expected_automation_slug(self):
+        with self.assertRaisesRegex(ValueError, "native_reference_contract_changed"):
+            validate_native_reference(
+                self.source.replace(
+                    'alias: "balkons_telegram_native_notification_staged"',
+                    'alias: "Balkons: MQTT notification to native Telegram (staged)"',
+                )
+            )
+
+    def test_ui_inert_staging_documentation_guards_first_save(self):
+        doc = (ROOT / "docs/BALKONS_TELEGRAM_HA_NATIVE_SIMPLIFICATION.md").read_text(
+            encoding="utf-8"
+        )
+        marker = "### HA UI INERT staging — precīzs ID un pirmais Save"
+        self.assertEqual(doc.count(marker), 1)
+        current = doc.split(marker, 1)[1]
+        for required in (
+            "source-only", "initial_state: false", "enabled: false",
+            "automation.balkons_telegram_native_notification_staged",
+            "GUI first-save", "ON", "OFF", "NO_ENABLE",
+            "Composite STRICT LIVE", "STOP", "bez Telegram sūtīšanas",
+        ):
+            self.assertIn(required, current)
 
     def test_extra_action_rejected(self):
         with self.assertRaises(ValueError):
