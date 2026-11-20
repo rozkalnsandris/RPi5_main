@@ -12,16 +12,17 @@ import re
 from typing import Any
 
 from grafana_continuity_core import check_report as check_grafana_report
+from memory_pressure_core import COLLECTOR_VERSION as CURRENT_V08_VERSION, validate_counter_intervals
 
 SCHEMA = "rpi5.grafana-host-correlation.v1"
 UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 HOST_SCHEMA = "rpi5.memory-pressure-diagnostic.v1"
-HOST_VERSIONS = frozenset(("v08.0.0", "v08.1.0"))
+HOST_VERSIONS = frozenset(("v08.0.0", "v08.1.0", CURRENT_V08_VERSION))
 COUNTERS = ("pswpin_pages", "pswpout_pages", "pgmajfault", "oom_kill")
 PSI = ("psi_some_total_usec", "psi_full_total_usec")
 LIMITATIONS = (
-    "V08 collected_at_utc is a coarse run-start timestamp, not the exact vmstat or PSI read time.",
-    "Overlap is nominal only; a V08 short window cannot attribute Grafana events or host swap.",
+    "Legacy V08 has coarse timestamps; v08.2 can bound actual vmstat read envelopes.",
+    "Counter-window overlap never identifies event instants or attributes host paging to Grafana.",
     "Grafana V02 cgroup identity is checked within one invocation, not across bundles.",
     "No same-window Grafana HTTP error, request duration or dashboard performance was measured.",
     "PSI absent or legacy v08.0.0 is unknown, not zero.",
@@ -80,7 +81,20 @@ def normalized_host(report: object) -> dict[str, Any]:
     if not all(integer(delta.get(k), nullable=True) for k in PSI):
         reject()
     # Legacy PSI uses placeholders, never treat a legacy zero as a measurement.
-    psi_valid = meta["collector_version"] == "v08.1.0" and all(delta[k] is not None for k in PSI)
+    psi_valid = meta["collector_version"] != "v08.0.0" and all(delta[k] is not None for k in PSI)
+    counter_window = None
+    if meta["collector_version"] == CURRENT_V08_VERSION:
+        try:
+            timings = validate_counter_intervals(meta)
+        except (ValueError, KeyError, TypeError):
+            reject()
+        if meta["clock_source"] == "system_utc_monotonic":
+            # Inner bound guaranteed to lie in the first-to-last counter-read span.
+            # This still cannot timestamp any individual counter increment.
+            counter_window = {
+                "start_utc": timings["vmstat"]["start"]["after"]["utc"],
+                "end_utc": timings["vmstat"]["end"]["before"]["utc"],
+            }
     return {
         "start_utc": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "nominal_end_utc": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -95,6 +109,7 @@ def normalized_host(report: object) -> dict[str, Any]:
         "host_oom_kill": delta["oom_kill"],
         "psi_some_usec": delta["psi_some_total_usec"] if psi_valid else None,
         "psi_full_usec": delta["psi_full_total_usec"] if psi_valid else None,
+        "counter_window": counter_window,
     }
 
 
@@ -118,12 +133,25 @@ def summarize(host_reports: list[dict], grafana_report: dict) -> dict:
     for h in hosts:
         a, b = timestamp(h["start_utc"]), timestamp(h["nominal_end_utc"])
         h["nominal_overlap"] = a < end and b > start
+        window = h["counter_window"]
+        if window is not None:
+            p = datetime.strptime(window["start_utc"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+            q = datetime.strptime(window["end_utc"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+            if q <= p:
+                reject()
+            h["measured_counter_overlap"] = p < end and q > start
+        else:
+            h["measured_counter_overlap"] = False
     d = grafana_report["event_deltas"]["local"]
     return {
         "schema": SCHEMA,
         "synthetic": synthetic,
-        "classification": "nominal_overlap_not_alignment" if any(h["nominal_overlap"] for h in hosts)
-                          else "no_nominal_overlap",
+        "classification": (
+            "bounded_counter_window_overlap" if any(h["measured_counter_overlap"] for h in hosts)
+            else "nominal_overlap_not_alignment" if any(h["nominal_overlap"] for h in hosts)
+            else "no_nominal_overlap"
+        ),
+        "measured_counter_window_overlap": any(h["measured_counter_overlap"] for h in hosts),
         "proven_causation": False,
         "verified_same_window": False,
         "grafana": {
