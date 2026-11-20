@@ -116,7 +116,36 @@ assert o['swap_used_kib']==2300000
 assert d['pswpout_pages']==2 and d['pgmajfault']==3 and d['psi_some_total_usec']==300
 assert len(r['top_processes'])==2 and r['top_processes'][0]=={'name':'python3','rss_kib':200000}
 assert [x['name'] for x in r['containers']]==['adguard','homeassistant']
+assert r['metadata']['collector_version']=='v08.2.0'
+assert r['metadata']['clock_source']=='synthetic_test'
+assert set(r['metadata']['counter_intervals'])=={'psi','vmstat'}
 PY
+python3 - "${one}/metadata.json" "${repo}/scripts" <<'PY'
+import copy, json, pathlib, sys
+sys.path.insert(0, sys.argv[2])
+from memory_pressure_core import BundleError, validate_counter_intervals
+meta = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert validate_counter_intervals(meta) == meta["counter_intervals"]
+for mutation in ("elapsed", "utc", "extra", "missing", "source"):
+    bad = copy.deepcopy(meta)
+    if mutation == "elapsed":
+        bad["counter_intervals"]["vmstat"]["end"]["before"]["elapsed_us"] = 1
+    elif mutation == "utc":
+        bad["counter_intervals"]["vmstat"]["start"]["after"]["utc"] = "invalid"
+    elif mutation == "extra":
+        bad["counter_intervals"]["psi"]["start"]["before"]["pid"] = 123
+    elif mutation == "missing":
+        del bad["counter_intervals"]["vmstat"]["end"]
+    else:
+        bad["clock_source"] = "unknown"
+    try:
+        validate_counter_intervals(bad)
+    except BundleError:
+        pass
+    else:
+        raise AssertionError("accepted malformed timing: " + mutation)
+PY
+
 grep -q '\[REDACTED_HEX_ID\]' "${one}/sections/kernel_memory_events.txt" || fail 'kernel ID not redacted'
 grep -q '\[REDACTED_IP\]' "${one}/sections/kernel_memory_events.txt" || fail 'kernel IP not redacted'
 
