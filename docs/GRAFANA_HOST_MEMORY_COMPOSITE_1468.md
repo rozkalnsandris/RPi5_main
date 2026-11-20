@@ -31,3 +31,26 @@ After source readiness, the owner may approve **one explicit bounded Composite L
 Any error or uncertainty **after the first evidence write** means STOP without retry, rollback, cleanup, re-collection, alternate host mutation or manufactured evidence; all unverified/partial evidence must remain non-VERIFIED. This document grants **NO_LIVE_AUTHORITY**. Do not change Docker limits, cgroup settings, services, Prometheus scrape jobs, Grafana endpoints, RPi5 packages or production data. Grafana performance impact and memory resource budget remain unproven; hold 300 MiB until independently corroborated evidence justifies an owner decision under #1469.
 
 Official semantics: [Linux cgroup v2 memory.events](https://docs.kernel.org/admin-guide/cgroup-v2.html) and [Prometheus HTTP API](https://prometheus.io/docs/prometheus/latest/querying/api/). Existing source contracts: [V08](V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md), [V09](V09_MEMORY_PRESSURE_SERIES_CONTRACT.md), [Grafana continuous identity](GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md).
+
+## 2026-11-20 — v08.2.0 measured-window source amendment (#1468)
+
+A source-only change now records bounded UTC+monotonic before/after
+read envelopes around both V08 PSI and vmstat counter reads. The
+offline analyzer may label a **real-clock v08.2.0** conservative counter
+window `bounded_counter_window_overlap` when its **inner** measured
+vmstat interval overlaps the Grafana V02 first/last sample timestamps.
+All older bundles remain `nominal_overlap_not_alignment` or
+`no_nominal_overlap`, and synthetic test clocks never count as real
+timing evidence.
+
+The invariant `verified_same_window=false` is intentional: counter
+read envelopes and Grafana sample timestamps do not pinpoint when
+any individual kernel counter changed. `proven_causation=false`
+also remains invariant. No same-window Grafana request-error or
+latency metrics, independently labeled idle/busy activity or production
+health impact have been verified by this amendment.
+
+The source outcome does not authorize new RPi5 evidence writes;
+it does not change the Grafana 300 MiB cap. #1468 remains open and
+#1469 remains blocked on a separately approved, controlled
+observational comparison.

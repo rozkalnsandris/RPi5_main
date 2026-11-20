@@ -2,13 +2,15 @@
 """Shared deterministic parsing and rendering for V08 memory-pressure bundles."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import pathlib
 import re
 from typing import Any
 
 SCHEMA = "rpi5.memory-pressure-diagnostic.v1"
-COLLECTOR_VERSION = "v08.1.0"
+COLLECTOR_VERSION = "v08.2.0"
+PREVIOUS_COLLECTOR_VERSION = "v08.1.0"
 LEGACY_COLLECTOR_VERSION = "v08.0.0"
 MEMINFO_KEYS = (
     "MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached",
@@ -29,6 +31,7 @@ SECTION_FILES = (
 SECTION_NAMES = tuple(name.rsplit(".", 1)[0] for name in SECTION_FILES)
 UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+PRECISE_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
 SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@+-]{0,127}$")
 SIZE_RE = re.compile(r"^(?:0|[0-9]+(?:\.[0-9]+)?[KMGTP]?i?B)$")
 PERCENT_RE = re.compile(r"^(?:0|[0-9]+(?:\.[0-9]+)?)%$")
@@ -43,6 +46,54 @@ class BundleError(ValueError):
 
 def canonical_json(data: Any) -> str:
     return json.dumps(data, sort_keys=True, indent=2) + "\n"
+
+
+def validate_counter_intervals(metadata: dict[str, Any]) -> dict[str, Any] | None:
+    """Check v08.2 counter-read envelopes; never invent timing for legacy bundles."""
+    if metadata.get("collector_version") != COLLECTOR_VERSION:
+        return None
+    if not isinstance(metadata.get("clock_source"), str) or metadata["clock_source"] not in {"system_utc_monotonic", "synthetic_test"}:
+        raise BundleError("invalid counter clock provenance")
+    windows = metadata.get("counter_intervals")
+    if not isinstance(windows, dict) or set(windows) != {"psi", "vmstat"}:
+        raise BundleError("invalid counter timing kinds")
+    points = []
+    for kind, phase in (("psi", "start"), ("vmstat", "start"),
+                        ("psi", "end"), ("vmstat", "end")):
+        phases = windows[kind]
+        if not isinstance(phases, dict) or set(phases) != {"start", "end"}:
+            raise BundleError("invalid timing phases")
+        pair = phases[phase]
+        if not isinstance(pair, dict) or set(pair) != {"before", "after"}:
+            raise BundleError("invalid read envelope")
+        for side in ("before", "after"):
+            mark = pair[side]
+            if not isinstance(mark, dict) or set(mark) != {"utc", "elapsed_us"}:
+                raise BundleError("invalid timestamp fields")
+            stamp, elapsed = mark["utc"], mark["elapsed_us"]
+            if not isinstance(stamp, str) or not PRECISE_UTC_RE.fullmatch(stamp):
+                raise BundleError("invalid precise UTC")
+            try:
+                clock = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+            except ValueError as exc:
+                raise BundleError("invalid calendar UTC") from exc
+            if not 2020 <= clock.year <= 2100 or type(elapsed) is not int or not 0 <= elapsed < 86_400_000_000:
+                raise BundleError("invalid elapsed microseconds")
+            points.append((clock, elapsed))
+    if any(b[0] < a[0] or b[1] < a[1] for a, b in zip(points, points[1:])):
+        raise BundleError("counter clocks out of order")
+    if points[0][1] > 30_000_000 or points[-1][1] - points[0][1] > 180_000_000:
+        raise BundleError("counter readings outside bounded window")
+    if any(abs((b[0] - a[0]).total_seconds() -
+               (b[1] - a[1]) / 1_000_000) > 2.0 for a, b in zip(points, points[1:])):
+        raise BundleError("UTC drift relative to monotonic clock")
+    try:
+        collection = datetime.strptime(metadata["collected_at_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise BundleError("invalid collection timestamp") from exc
+    if not collection <= points[0][0] <= collection + timedelta(seconds=30):
+        raise BundleError("counter timing not anchored to collection")
+    return windows
 
 
 def read_tsv_map(path: pathlib.Path, header: tuple[str, str], allowed: tuple[str, ...]) -> dict[str, int]:

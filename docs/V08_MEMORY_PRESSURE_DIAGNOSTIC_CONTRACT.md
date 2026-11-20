@@ -47,3 +47,30 @@ Without the flag, legacy V08 behavior is unchanged. A future composite
 RPi5 diagnostic should include this flag unless separate protected
 kernel-journal inspection is explicitly owner-authorized. No source merge
 authorizes a new RPi5 host collection or LIVE activity.
+
+## Precise, backward-compatible counter-read envelopes (v08.2.0; #1468)
+
+V08 **v08.2.0** retains the existing schema and section inventory, adding
+`clock_source` and `counter_intervals` to its metadata. Each PSI and
+`/proc/vmstat` start/end read has **before/after** UTC timestamps at
+microsecond precision and monotonic elapsed microseconds within that
+invocation. The independent V08 verifier requires exact keys, valid
+calendar/time ordering, bounded elapsed time and UTC/monotonic agreement.
+The monotonic origin is not persisted. Fixed-clock test fixtures are marked
+`synthetic_test`; they cannot be treated as production measurements.
+
+The offline Grafana-host analyzer distinguishes legacy coarse collection
+start times from a **conservative vmstat counter window** bounded by
+*after the first read* and *before the last read*. A real-clock, verified
+v08.2.0 bundle may be classified `bounded_counter_window_overlap`
+relative to Grafana V02 sample timestamps. This does **not** establish
+the precise event time, Grafana performance or causation:
+`verified_same_window=false` and `proven_causation=false` remain
+invariant. v08.0.0 and v08.1.0 bundles retain original coarse semantics;
+the analyzer never fabricates missing historical timestamps. Unknown
+memory PSI is always null, not a measured zero.
+
+This is a source-only prerequisite for #1468. New RPi5 collection still
+requires a distinct, exact-SHA owner LIVE authorization and an unused,
+ignored, bounded output target. No services, Docker, memory limits,
+swap/zram or production settings are changed by this source update.

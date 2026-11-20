@@ -38,6 +38,28 @@ def host(sec: int, *, span: int = 20, version: str = "v08.1.0",
     }
 
 
+def timed_host(sec: int, *, real: bool = True) -> dict:
+    h = host(sec, version="v08.2.0")
+    def mark(offset_us: int) -> dict:
+        stamp = BASE + timedelta(seconds=sec, microseconds=offset_us)
+        return {"utc": stamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "elapsed_us": offset_us}
+    offsets = {
+        ("psi", "start"): (1_000_000, 1_010_000),
+        ("vmstat", "start"): (2_000_000, 2_010_000),
+        ("psi", "end"): (10_000_000, 10_010_000),
+        ("vmstat", "end"): (11_000_000, 11_010_000),
+    }
+    h["metadata"]["clock_source"] = "system_utc_monotonic" if real else "synthetic_test"
+    h["metadata"]["counter_intervals"] = {
+        kind: {phase: {"before": mark(offsets[(kind, phase)][0]),
+                       "after": mark(offsets[(kind, phase)][1])}
+               for phase in ("start", "end")}
+        for kind in ("psi", "vmstat")
+    }
+    return h
+
+
 def grafana(*, start: int = 10, end: int = 70, delta: int = 109) -> dict:
     def reading(sec: int, elapsed: int, max_events: int) -> dict:
         counters = {"max": max_events, "oom": 0, "oom_kill": 0}
@@ -82,6 +104,14 @@ def main() -> None:
     assert not any(x["nominal_overlap"] for x in apart["host_windows"])
     boundary = summarize([host(-10, span=20), host(70, span=20)], g)
     assert boundary["classification"] == "no_nominal_overlap", "touching boundaries are not overlap"
+    timed = summarize([timed_host(5), timed_host(40)], g)
+    assert timed["classification"] == "bounded_counter_window_overlap"
+    assert timed["measured_counter_window_overlap"]
+    assert timed["host_windows"][0]["measured_counter_overlap"]
+    assert not timed["verified_same_window"] and not timed["proven_causation"]
+    synthetic_timing = summarize([timed_host(5, real=False), timed_host(40, real=False)], g)
+    assert not synthetic_timing["measured_counter_window_overlap"]
+    assert synthetic_timing["classification"] == "nominal_overlap_not_alignment"
     old = normalized_host(host(10, version="v08.0.0", psi=0))
     assert old["psi_full_usec"] is None and old["psi_some_usec"] is None
     assert normalized_host(host(10, psi=None))["psi_full_usec"] is None
@@ -107,6 +137,21 @@ def main() -> None:
     malformed = copy.deepcopy(hs)
     malformed[0]["metadata"]["collector_version"] = "v08.future"
     rejects(malformed, g)
+    for change in ("reverse_monotonic", "invalid_utc", "extra_field", "missing_clock", "cross_clock_drift"):
+        broken = [timed_host(5), timed_host(40)]
+        meta = broken[0]["metadata"]
+        pairs = meta["counter_intervals"]
+        if change == "reverse_monotonic":
+            pairs["vmstat"]["end"]["before"]["elapsed_us"] = 1
+        elif change == "invalid_utc":
+            pairs["vmstat"]["start"]["before"]["utc"] = "2026-11-15T22:00:INVALIDZ"
+        elif change == "extra_field":
+            pairs["psi"]["start"]["before"]["secret"] = "forbidden"
+        elif change == "missing_clock":
+            del meta["clock_source"]
+        else:
+            pairs["vmstat"]["end"]["before"]["utc"] = "2026-11-15T22:10:00.000000Z"
+        rejects(broken, g)
     bad = copy.deepcopy(g)
     bad["event_deltas"]["local"]["max"] = 110
     rejects(hs, bad)

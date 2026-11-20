@@ -14,6 +14,8 @@ import sys
 from memory_pressure_core import (
     COLLECTOR_VERSION,
     LEGACY_COLLECTOR_VERSION,
+    PREVIOUS_COLLECTOR_VERSION,
+    validate_counter_intervals,
     SCHEMA,
     SECTION_FILES,
     SECTION_NAMES,
@@ -166,10 +168,17 @@ def main() -> None:
             scan_section_text(sections / filename)
 
         metadata = json.loads((bundle / "metadata.json").read_text(encoding="utf-8"))
-        if set(metadata) != {"schema", "collector_version", "git_commit", "collected_at_utc", "sample_seconds"}:
+        legacy_fields = {"schema", "collector_version", "git_commit", "collected_at_utc", "sample_seconds"}
+        version = metadata.get("collector_version")
+        expected = legacy_fields | ({"clock_source", "counter_intervals"}
+                                    if version == COLLECTOR_VERSION else set())
+        if set(metadata) != expected:
             fail("invalid metadata fields")
-        if metadata["schema"] != SCHEMA or metadata["collector_version"] not in {COLLECTOR_VERSION, LEGACY_COLLECTOR_VERSION}:
+        if metadata["schema"] != SCHEMA or version not in {
+            COLLECTOR_VERSION, PREVIOUS_COLLECTOR_VERSION, LEGACY_COLLECTOR_VERSION
+        }:
             fail("invalid metadata version")
+        validate_counter_intervals(metadata)
         if metadata["git_commit"] != "unavailable" and not COMMIT_RE.fullmatch(metadata["git_commit"]):
             fail("invalid git commit")
         if not UTC_RE.fullmatch(metadata["collected_at_utc"]):
