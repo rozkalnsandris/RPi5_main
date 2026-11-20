@@ -146,6 +146,25 @@ class Tests(unittest.TestCase):
         finally:
             admin.ARCHIVE=old_archive
 
+    def test_archive_record_exists_uses_safe_child_selection(self):
+        old_archive=admin.ARCHIVE
+        root=Path(self.tmp.name)/"archive-exists";root.mkdir()
+        admin.ARCHIVE=root
+        page_id="1234567"
+        target=root/(page_id+".json")
+        try:
+            self.assertFalse(admin.archive_record_exists(page_id))
+            target.write_text("{}\n",encoding="utf-8")
+            self.assertTrue(admin.archive_record_exists(page_id))
+            target.unlink()
+            outside=Path(self.tmp.name)/"outside-archive-exists.json"
+            outside.write_text("{}\n",encoding="utf-8")
+            target.symlink_to(outside)
+            with self.assertRaises(admin.Stop):
+                admin.archive_record_exists(page_id)
+        finally:
+            admin.ARCHIVE=old_archive
+
     def test_write_json_child_confines_target_to_open_directory(self):
         root=Path(self.tmp.name)/"json-write-safety";root.mkdir()
         outside=Path(self.tmp.name)/"outside-write.json"
