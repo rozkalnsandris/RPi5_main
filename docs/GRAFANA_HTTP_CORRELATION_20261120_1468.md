@@ -2,7 +2,7 @@
 
 **VERIFIED BOUNDED HEALTH OBSERVATION. NO COMPREHENSIVE PERFORMANCE PROOF, CAUSAL ATTRIBUTION OR LIVE AUTHORITY.**
 
-This document records a *completed* owner-authorized `GRAFANA-HTTP-CORRELATION` one-shot on `rpi5`; no new host execution is authorized by this report. Sanitized raw evidence remains ignored and untracked under `/home/andris/RPi5_main/evidence/issue-1468-grafana-http-20261120/`.
+This document records a *completed* owner-authorized `GRAFANA-HTTP-CORRELATION` one-shot on `rpi5`; no new host execution is authorized by this report. Sanitized raw evidence remains ignored and untracked under `evidence/issue-1468-grafana-http-20261120/`.
 
 ## Owner authority, provenance and guardrails
 
