@@ -24,6 +24,20 @@ UPSTREAM_BLOBS = {
     "agent/auxiliary_client.py": "34401444a875280deec8fb4f8e49cb38e3a6cf65",
     "agent/image_routing.py": "763f20a56606da77bda318773ec8c9d6d381fd6d",
 }
+# Exact public vendor source identities; the second tuple was observed on rpi5
+# on 2026-11-02. These constants DO NOT verify a host or a running Gateway.
+OBSERVED_RPI5_CHECKOUT_COMMIT_20261102 = "76fe8f7f5f68a8c4ff3477b0e3904c3e26245df2"
+OBSERVED_RPI5_CHECKOUT_BLOBS_20261102 = {
+    "gateway/run_inbound.py": "c4c4fea7831dce5bf323ec33bae8216cfe70377e",
+    "tools/vision_tools.py": "861a5f689d3d461909c37459ddeea1d5ca6536d2",
+    "agent/auxiliary_client.py": "e2e9eba8501203f4cde8e02e31d2944cda24ff38",
+    "agent/image_routing.py": "31c75165009fd1cdfd337169c7d02952944d8f29",
+}
+KNOWN_PUBLIC_SOURCE_BLOBS = {
+    UPSTREAM_COMMIT: UPSTREAM_BLOBS,
+    OBSERVED_RPI5_CHECKOUT_COMMIT_20261102: OBSERVED_RPI5_CHECKOUT_BLOBS_20261102,
+}
+
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 MAX_BODY = 24_000
 
@@ -42,9 +56,9 @@ def verify_source_pin(revision: str, blobs: Mapping[str, str] | None) -> None:
     The caller must separately prove identities originate from the installed
     tree. Passing literal values here is NOT actual host provenance.
     """
-    if type(revision) is not str or revision != UPSTREAM_COMMIT:
+    if type(revision) is not str or revision not in KNOWN_PUBLIC_SOURCE_BLOBS:
         raise NotReady("INSTALLED_REVISION_UNVERIFIED")
-    if type(blobs) is not dict or blobs != UPSTREAM_BLOBS:
+    if type(blobs) is not dict or blobs != KNOWN_PUBLIC_SOURCE_BLOBS[revision]:
         raise NotReady("INSTALLED_BLOBS_UNVERIFIED")
 
 

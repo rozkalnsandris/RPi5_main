@@ -50,3 +50,24 @@ Vendor docs:
 - Offline ingress boundary and transport-entry guard: **IMPLEMENTED AS UNINSTALLED TEST ADAPTER**, conditional on supplied public-source identifiers.
 - Actual installed Gateway source, real ingress interception, live transport's internal retry semantics, live session effects and end-to-end picture recognition: **NOT VERIFIED**.
 - **NO LIVE MUTATIONS, EXTERNAL IMAGE DISPATCHES, PRIVATE MEDIA OR VENDOR REPO WRITES** were used to produce this source change.
+
+## 2026-11-02 observed RPi5 checkout: separate offline-only source pin (#1342)
+
+A narrowly owner-authorized, read-only RPi5 preflight observed the local checkout `~/.hermes/hermes-agent` at commit `76fe8f7f5f68a8c4ff3477b0e3904c3e26245df2`. Its four relevant **worktree** Git blobs exactly matched the checkout `HEAD`, and subsequent GitHub connector reads confirmed those bytes' Git blob identities in the public `NousResearch/hermes-agent` repository at that same commit. This is a **dated checkout identity observation**, not a service's loaded module identity or proof of safe integration.
+
+| Old installed checkout file | Git blob SHA-1 (2026-11-02) |
+| --- | --- |
+| [`gateway/run_inbound.py`](https://github.com/NousResearch/hermes-agent/blob/76fe8f7f5f68a8c4ff3477b0e3904c3e26245df2/gateway/run_inbound.py) | `c4c4fea7831dce5bf323ec33bae8216cfe70377e` |
+| [`tools/vision_tools.py`](https://github.com/NousResearch/hermes-agent/blob/76fe8f7f5f68a8c4ff3477b0e3904c3e26245df2/tools/vision_tools.py) | `861a5f689d3d461909c37459ddeea1d5ca6536d2` |
+| [`agent/auxiliary_client.py`](https://github.com/NousResearch/hermes-agent/blob/76fe8f7f5f68a8c4ff3477b0e3904c3e26245df2/agent/auxiliary_client.py) | `e2e9eba8501203f4cde8e02e31d2944cda24ff38` |
+| [`agent/image_routing.py`](https://github.com/NousResearch/hermes-agent/blob/76fe8f7f5f68a8c4ff3477b0e3904c3e26245df2/agent/image_routing.py) | `31c75165009fd1cdfd337169c7d02952944d8f29` |
+
+The prior public upstream commit `c627ec84664d43e0b18b95d9d86d8963747d56c7` and its existing four blob identifiers remain recognized **only as a different complete tuple**. `verify_source_pin` now accepts these two exact metadata tuples and fails closed on unknown revisions, mixed blobs or missing/extra paths. This verifier still accepts *caller-supplied metadata*: the caller could supply a constant tuple without checking the host; therefore **offline PASS does not attest the installed tree**.
+
+### Material source-level differences and gate
+
+The old checkout contains `_enrich_inbound_images` and `_enrich_message_with_vision`: it may buffer native image paths or iterate text-mode images and call `vision_analyze_tool`. Its `tools/vision_tools.py` contains download, resize, empty-output and error retry branches; `agent/auxiliary_client.py` supplies some OpenAI client instances with `max_retries=0`, **not a proof that every actual Gateway/SDK/HTTP transport path is single-dispatch**. Newer public source differs in the same four files, including earlier inbound-media handling. Merely recognizing both identities does not establish callable signature equivalence, safe integration, side-effect containment or runtime adoption.
+
+The fixed-fixture envelope and offline one-delegate transport checks continue to reject native, user media, URL/path, fan-out, alternate provider/model, paid route, inconsistent bodies and second mock entries. They still do **not** intercept the actual vendor Gateway. `require_live_transport_readiness` intentionally rejects both source pins with `VENDOR_GATEWAY_INTEGRATION_NOT_INSTALLED`.
+
+**Exact next engineering boundary:** independently design and review a *dedicated* synthetic test injection seam for the **actual installed** revision before media rehome/cache/session persistence, with pinned running-code identity, zero hidden retries and explicit no-session/no-chat side effects. The real Gateway may need vendor-source changes or an isolated test harness; do not patch/install/invoke it without separate explicit source scope and owner LIVE authority. This #1342 adjustment neither sends an image nor grants service, account, provider or production-data actions.

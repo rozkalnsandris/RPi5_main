@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "ops/lib"))
 
 from hermes_gateway_vision_guard_v1 import (  # noqa: E402
     BoundaryRejected, ENDPOINT, NotReady, OfflineSingleDispatchHttpTransport,
+    OBSERVED_RPI5_CHECKOUT_BLOBS_20261102, OBSERVED_RPI5_CHECKOUT_COMMIT_20261102,
     UPSTREAM_BLOBS, UPSTREAM_COMMIT, gateway_ingress_envelope,
     require_fixed_http_request, require_live_transport_readiness,
     verify_source_pin,
@@ -34,6 +35,12 @@ def allowed() -> dict:
         provider=PROVIDER, model=MODEL,
         installed_revision=UPSTREAM_COMMIT, installed_blobs=dict(UPSTREAM_BLOBS),
     )
+
+
+def observed_checkout_allowed() -> dict:
+    return {**allowed(),
+            "installed_revision": OBSERVED_RPI5_CHECKOUT_COMMIT_20261102,
+            "installed_blobs": dict(OBSERVED_RPI5_CHECKOUT_BLOBS_20261102)}
 
 
 def fake_http_request(**changes):
@@ -53,6 +60,31 @@ class SourceIdentityTests(unittest.TestCase):
             with self.subTest(changes=changes):
                 with self.assertRaises(NotReady):
                     verify_source_pin(*changes)
+
+    def test_observed_installed_source_tuple_is_offline_metadata_only(self):
+        verify_source_pin(OBSERVED_RPI5_CHECKOUT_COMMIT_20261102,
+                          dict(OBSERVED_RPI5_CHECKOUT_BLOBS_20261102))
+        # Both *complete* immutable tuples may drive only the synthetic mock.
+        with patch("builtins.open", side_effect=AssertionError("READ_ATTEMPT")), (
+            patch.object(socket.socket, "connect", side_effect=AssertionError("NETWORK"))):
+            for candidate in (allowed(), observed_checkout_allowed()):
+                with self.subTest(revision=candidate["installed_revision"]):
+                    self.assertEqual(gateway_ingress_envelope(**candidate), synthetic_request())
+
+    def test_reject_mixed_incomplete_and_unrecognized_source_tuples(self):
+        for revision, blobs in (
+            (UPSTREAM_COMMIT, dict(OBSERVED_RPI5_CHECKOUT_BLOBS_20261102)),
+            (OBSERVED_RPI5_CHECKOUT_COMMIT_20261102, dict(UPSTREAM_BLOBS)),
+            (OBSERVED_RPI5_CHECKOUT_COMMIT_20261102, {**OBSERVED_RPI5_CHECKOUT_BLOBS_20261102, "extra.py": "a"*40}),
+            (OBSERVED_RPI5_CHECKOUT_COMMIT_20261102, {"gateway/run_inbound.py": "c4c4fea7831dce5bf323ec33bae8216cfe70377e"}),
+            ("c"*40, dict(OBSERVED_RPI5_CHECKOUT_BLOBS_20261102)),
+        ):
+            with self.subTest(revision=revision, blobs_count=len(blobs)):
+                with self.assertRaises(NotReady):
+                    verify_source_pin(revision, blobs)
+                with patch("builtins.open", side_effect=AssertionError("READ_ATTEMPT")):
+                    with self.assertRaises(NotReady):
+                        gateway_ingress_envelope(**{**allowed(), "installed_revision": revision, "installed_blobs": blobs})
 
     def test_gateway_metadata_fixture_only_before_media_access(self):
         with patch("builtins.open", side_effect=AssertionError("READ_ATTEMPT")), (
