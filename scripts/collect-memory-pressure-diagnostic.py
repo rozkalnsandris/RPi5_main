@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta, timezone
 import hashlib
 import os
 import pathlib
@@ -269,6 +270,33 @@ def main() -> None:
         "A short sample can miss intermittent pressure; compare repeated bundles before concluding that retained swap is active pressure.",
     }
 
+    clock_origin_ns = time.monotonic_ns()
+    clock_step = 0
+    fixed_clock = (datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                   if TEST_MODE and os.environ.get("MEMORY_DIAG_FIXED_UTC") else None)
+    counter_intervals: dict[str, dict] = {"psi": {}, "vmstat": {}}
+
+    def clock_mark() -> dict[str, str | int]:
+        nonlocal clock_step
+        if fixed_clock is not None:
+            # Synthetic only: deterministic fixtures never count as live timing.
+            clock_step += 1
+            stamp = fixed_clock + timedelta(microseconds=clock_step)
+            return {"utc": stamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                    "elapsed_us": clock_step}
+        stamp = datetime.now(timezone.utc)
+        elapsed = (time.monotonic_ns() - clock_origin_ns) // 1000
+        return {"utc": stamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "elapsed_us": elapsed}
+
+    def timed_proc(relative: str, phase: str) -> tuple[bool, int, str]:
+        before = clock_mark()
+        reading = read_proc(relative, phase)
+        after = clock_mark()
+        kind = "psi" if relative == "pressure/memory" else "vmstat"
+        counter_intervals[kind][phase] = {"before": before, "after": after}
+        return reading
+
     def write_section(filename: str, category: str, available: bool, rc: int, content: str) -> None:
         safe = cap_bytes(sanitize_text(content))
         path = sections / filename
@@ -279,19 +307,19 @@ def main() -> None:
     available, rc, raw = read_proc("meminfo", "start")
     write_section("meminfo.tsv", "host-memory", available, rc, parse_meminfo(raw) if rc == 0 else "key\tvalue_kib\n")
 
-    psi_available, psi_start_rc, psi_start_raw = read_proc("pressure/memory", "start")
+    psi_available, psi_start_rc, psi_start_raw = timed_proc("pressure/memory", "start")
     write_section("psi_start.txt", "memory-pressure", psi_available, psi_start_rc, psi_start_raw if psi_start_rc == 0 else "")
-    vm_available, vm_start_rc, vm_start_raw = read_proc("vmstat", "start")
+    vm_available, vm_start_rc, vm_start_raw = timed_proc("vmstat", "start")
     write_section("vmstat_start.tsv", "memory-counters", vm_available, vm_start_rc, parse_vmstat(vm_start_raw) if vm_start_rc == 0 else "key\tvalue\n")
 
     if SAMPLE_SECONDS:
         time.sleep(SAMPLE_SECONDS)
 
-    psi_end_available, psi_end_rc, psi_end_raw = read_proc("pressure/memory", "end")
+    psi_end_available, psi_end_rc, psi_end_raw = timed_proc("pressure/memory", "end")
     write_section("psi_end.txt", "memory-pressure", psi_end_available, psi_end_rc, psi_end_raw if psi_end_rc == 0 else "")
     if psi_start_rc != 0 or psi_end_rc != 0:
         limitations.add("Memory PSI unavailable; its values are unknown, not zero.")
-    vm_end_available, vm_end_rc, vm_end_raw = read_proc("vmstat", "end")
+    vm_end_available, vm_end_rc, vm_end_raw = timed_proc("vmstat", "end")
     write_section("vmstat_end.tsv", "memory-counters", vm_end_available, vm_end_rc, parse_vmstat(vm_end_raw) if vm_end_rc == 0 else "key\tvalue\n")
 
     swap_available, swap_rc, swap_raw = read_proc("swaps", "start")
@@ -330,6 +358,8 @@ def main() -> None:
         "git_commit": git_commit(),
         "collected_at_utc": timestamp,
         "sample_seconds": SAMPLE_SECONDS,
+        "clock_source": "synthetic_test" if fixed_clock is not None else "system_utc_monotonic",
+        "counter_intervals": counter_intervals,
     }
     (result / "metadata.json").write_text(canonical_json(metadata), encoding="utf-8", newline="\n")
     os.chmod(result / "metadata.json", 0o600)
