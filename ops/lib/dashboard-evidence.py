@@ -24,12 +24,17 @@ BACKUP_MAX_RUNS = 32
 EVENT_MAX_ITEMS = 64
 BACKUP_SCHEMA = "dashboard-rpi5.backup-evidence.v1"
 ENDPOINT_SCHEMA = "dashboard-rpi5.endpoint-evidence.v1"
+ENDPOINT_PENDING_SCHEMA = "dashboard-rpi5.endpoint-pending.v1"
+ENDPOINT_FAILURE_THRESHOLD = 3
+ENDPOINT_FAILURE_MAX_GAP_SECONDS = 600
+ENDPOINT_PENDING_MAX_ITEMS = 8
 THROTTLE_SCHEMA = "dashboard-rpi5.throttle-evidence.v1"
 DEPLOY_TRANSACTION_SCHEMA = "rpi5.controlled-deploy-transaction.v1"
 DEPLOY_REPOSITORY = "rozkalnsandris/RPi5_main"
 FILES = {
     "backup": "backups.json",
     "endpoint": "endpoints.json",
+    "endpoint_pending": "endpoint-pending.json",
     "maintenance": "maintenance.json",
     "deploy": "deployments.json",
     "throttle": "throttle.json",
@@ -315,6 +320,55 @@ def record_backup(*, run_id: str, started_at: str, completed_at: str, exit_code:
     return True
 
 
+def _endpoint_observation_confirmed(*, endpoint_id: str, state: str,
+                                    occurred_at: str, root: Path, production: bool) -> bool:
+    """Require three distinct, recent failed collector cycles before a new DOWN."""
+    path = _path("endpoint_pending", root)
+    value = _read_existing(
+        path, {"schema": ENDPOINT_PENDING_SCHEMA, "failures": {}}, production=production,
+    )
+    if (set(value) != {"schema", "failures"}
+            or value["schema"] != ENDPOINT_PENDING_SCHEMA
+            or not isinstance(value["failures"], dict)
+            or len(value["failures"]) > ENDPOINT_PENDING_MAX_ITEMS):
+        raise ValueError("invalid existing endpoint pending evidence")
+    failures = value["failures"]
+    for candidate_id, entry in failures.items():
+        if (not SAFE_ENDPOINT_ID.fullmatch(candidate_id)
+                or not isinstance(entry, dict)
+                or set(entry) != {"count", "lastObservedAt"}
+                or type(entry["count"]) is not int
+                or not 1 <= entry["count"] <= ENDPOINT_FAILURE_THRESHOLD):
+            raise ValueError("invalid endpoint pending entry")
+        parse_iso(entry["lastObservedAt"])
+
+    previous = failures.get(endpoint_id)
+    elapsed = None
+    if previous is not None:
+        elapsed = (parse_iso(occurred_at) - parse_iso(previous["lastObservedAt"])).total_seconds()
+        if elapsed <= 0:
+            raise ValueError("endpoint observation must be newer than pending failure")
+
+    if state == "DOWN":
+        count = (
+            previous["count"] + 1
+            if previous is not None and elapsed <= ENDPOINT_FAILURE_MAX_GAP_SECONDS
+            else 1
+        )
+        count = min(count, ENDPOINT_FAILURE_THRESHOLD)
+        if previous is None and len(failures) >= ENDPOINT_PENDING_MAX_ITEMS:
+            raise ValueError("endpoint pending evidence exceeds bound")
+        failures[endpoint_id] = {"count": count, "lastObservedAt": occurred_at}
+        _atomic_write(path, value, production=production)
+        return count >= ENDPOINT_FAILURE_THRESHOLD
+
+    # A valid response (including DEGRADED) ends the consecutive-DOWN streak.
+    if previous is not None:
+        del failures[endpoint_id]
+        _atomic_write(path, value, production=production)
+    return True
+
+
 def record_endpoint(*, endpoint_id: str, label: str, state: str, status_code: int | None,
                     latency_ms: int | None, occurred_at: str, root: Path = EVIDENCE_ROOT) -> bool:
     ensure_root(root)
@@ -343,6 +397,13 @@ def record_endpoint(*, endpoint_id: str, label: str, state: str, status_code: in
         if event.get("endpointId") == endpoint_id:
             previous_state = event.get("toState")
             break
+    if previous_state == "DOWN" and state == "DOWN":
+        return False
+    if not _endpoint_observation_confirmed(
+        endpoint_id=endpoint_id, state=state, occurred_at=occurred_at,
+        root=root, production=production,
+    ):
+        return False
     if previous_state == state:
         return False
     if previous_state not in STATES:

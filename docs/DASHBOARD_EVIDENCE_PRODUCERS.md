@@ -51,6 +51,32 @@ valid HTTP response is `DEGRADED`, and no valid HTTP response is `DOWN`. The fix
 
 Only transitions are retained, newest first, up to 64 events.
 
+### Transient DOWN suppression (issue #1536)
+
+The root-owned collector uses the existing within-cycle curl retry, then
+requires **three consecutive failed 2-minute collector cycles** to record
+a new `DOWN` transition for an endpoint. This follows the pending-period
+pattern in [Prometheus alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
+One or two failed cycles retain the last *known* status without writing
+an incorrect critical DOWN/UP event; an endpoint with no recorded event
+remains UNKNOWN until its third failed observation. A valid HTTP response
+clears the consecutive-DOWN streak immediately, including a valid
+`DEGRADED` response, whose existing status semantics are unchanged.
+UP recovery from a confirmed DOWN is recorded immediately.
+
+Pending counters survive the collector's one-shot systemd service cycles in
+`/var/lib/dashboard-rpi5/evidence/endpoint-pending.json`. This is
+**producer-private** state (not a browser/agent contract), atomically replaced
+root-owned `0644` using the same validated evidence directory. Its strict
+schema is `dashboard-rpi5.endpoint-pending.v1`, limited to eight distinct
+endpoint IDs and counts 1–3. A failure gap greater than ten minutes restarts
+its streak, and duplicate or out-of-order observations fail closed. Unsafe,
+malformed or oversized pending state is rejected, not treated as a clean
+counter reset. No change to the existing `endpoints.json` schema or to the
+systemd timer is required. This delay affects *transition classification*,
+not the raw availability or underlying service health; operators must still
+correlate outages with host and network evidence.
+
 ## Maintenance evidence
 
 The dashboard must not receive broad journal authority merely to learn whether

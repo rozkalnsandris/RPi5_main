@@ -50,22 +50,99 @@ backup = json.loads((root / "backups.json").read_text())
 assert backup["schema"] == "dashboard-rpi5.backup-evidence.v1"
 assert [item["result"] for item in backup["runs"]] == ["FAILED", "SUCCESS"]
 
-assert helper.record_endpoint(
-    endpoint_id="grafana", label="Grafana", state="UP", status_code=302,
-    latency_ms=40, occurred_at="2026-08-22T20:00:00Z", root=root,
-)
-assert not helper.record_endpoint(
-    endpoint_id="grafana", label="Grafana", state="UP", status_code=302,
-    latency_ms=41, occurred_at="2026-08-22T20:02:00Z", root=root,
-)
-assert helper.record_endpoint(
-    endpoint_id="grafana", label="Grafana", state="DOWN", status_code=None,
-    latency_ms=None, occurred_at="2026-08-22T20:04:00Z", root=root,
-)
+# Preserve the existing initial UP evidence, but confirm DOWN only after
+# three distinct failed collector cycles (not just one curl retry).
+def grafana(state: str, when: str, status: int | None = None) -> bool:
+    return helper.record_endpoint(
+        endpoint_id="grafana", label="Grafana", state=state,
+        status_code=status, latency_ms=None,
+        occurred_at=f"2026-08-22T{when}Z", root=root,
+    )
+
+assert grafana("UP", "20:00:00", 302)
+assert not grafana("UP", "20:02:00", 302)
+assert not grafana("DOWN", "20:04:00")
+assert json.loads((root / "endpoints.json").read_text())["events"][0]["toState"] == "UP"
+assert not grafana("DOWN", "20:06:00")
+pending_path = root / "endpoint-pending.json"
+pending = json.loads(pending_path.read_text())
+assert pending["schema"] == helper.ENDPOINT_PENDING_SCHEMA
+assert pending["failures"]["grafana"]["count"] == 2
+assert stat.S_IMODE(pending_path.stat().st_mode) == 0o644
+
+# One successful check resets a near-outage without emitting a false transition.
+assert not grafana("UP", "20:08:00", 302)
+assert json.loads(pending_path.read_text())["failures"] == {}
+assert not grafana("DOWN", "20:10:00")
+assert not grafana("DOWN", "20:12:00")
+assert grafana("DOWN", "20:14:00")
+assert not grafana("DOWN", "20:16:00")
 endpoint = json.loads((root / "endpoints.json").read_text())
 assert endpoint["events"][0]["fromState"] == "UP"
 assert endpoint["events"][0]["toState"] == "DOWN"
-assert endpoint["events"][1]["fromState"] == "UNKNOWN"
+assert grafana("UP", "20:18:00", 302)
+endpoint = json.loads((root / "endpoints.json").read_text())
+assert endpoint["events"][0]["fromState"] == "DOWN"
+assert endpoint["events"][0]["toState"] == "UP"
+assert json.loads(pending_path.read_text())["failures"] == {}
+
+# A missing initial status remains UNKNOWN during the first two failures,
+# and the per-endpoint pending counters cannot affect another endpoint.
+fresh_root = Path(tempfile.mkdtemp(prefix="dashboard-endpoint-pending-")) / "evidence"
+def observe(endpoint_id: str, state: str, when: str, *, root_path: Path = fresh_root) -> bool:
+    return helper.record_endpoint(
+        endpoint_id=endpoint_id, label=endpoint_id, state=state,
+        status_code=200 if state == "UP" else None, latency_ms=None,
+        occurred_at=f"2026-08-22T{when}Z", root=root_path,
+    )
+
+assert observe("portainer", "UP", "20:00:00")
+assert not observe("portainer", "DOWN", "20:02:00")
+assert observe("hermes", "UP", "20:03:00")
+assert not observe("portainer", "DOWN", "20:04:00")
+assert not observe("hermes", "UP", "20:05:00")
+assert observe("portainer", "DOWN", "20:06:00")
+assert observe("portainer", "UP", "20:08:00")
+
+unknown_root = Path(tempfile.mkdtemp(prefix="dashboard-endpoint-unknown-")) / "evidence"
+assert not observe("cv", "DOWN", "20:00:00", root_path=unknown_root)
+assert not (unknown_root / "endpoints.json").exists()
+assert not observe("cv", "DOWN", "20:02:00", root_path=unknown_root)
+assert observe("cv", "DOWN", "20:04:00", root_path=unknown_root)
+assert json.loads((unknown_root / "endpoints.json").read_text())["events"][0]["fromState"] == "UNKNOWN"
+
+# Old streaks expire, and repeated/out-of-order timestamps must not count.
+gap_root = Path(tempfile.mkdtemp(prefix="dashboard-endpoint-gap-")) / "evidence"
+assert not observe("cv", "DOWN", "20:00:00", root_path=gap_root)
+assert not observe("cv", "DOWN", "20:12:00", root_path=gap_root)
+try:
+    observe("cv", "DOWN", "20:12:00", root_path=gap_root)
+except ValueError:
+    pass
+else:
+    raise AssertionError("duplicate timestamp must not advance pending failures")
+assert not observe("cv", "DOWN", "20:14:00", root_path=gap_root)
+assert observe("cv", "DOWN", "20:16:00", root_path=gap_root)
+
+# Pending state is strictly validated and a symlink cannot be followed.
+bad_root = Path(tempfile.mkdtemp(prefix="dashboard-endpoint-bad-")) / "evidence"
+assert not observe("cv", "DOWN", "20:00:00", root_path=bad_root)
+pending_bad = bad_root / "endpoint-pending.json"
+pending_bad.write_text('{"schema":"dashboard-rpi5.endpoint-pending.v1","failures":{"cv":{"count":true,"lastObservedAt":"2026-08-22T20:00:00.000Z"}}}')
+try:
+    observe("cv", "DOWN", "20:02:00", root_path=bad_root)
+except ValueError:
+    pass
+else:
+    raise AssertionError("malformed pending state must fail closed")
+pending_bad.unlink()
+pending_bad.symlink_to(root / "endpoints.json")
+try:
+    observe("cv", "DOWN", "20:02:00", root_path=bad_root)
+except OSError:
+    pass
+else:
+    raise AssertionError("pending evidence symlink must fail closed")
 
 # Pre-fix collector-time timestamps must self-heal to the authoritative systemd
 # execution exit timestamp for the same invocation/result.
