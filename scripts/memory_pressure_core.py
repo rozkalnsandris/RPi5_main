@@ -52,7 +52,7 @@ def validate_counter_intervals(metadata: dict[str, Any]) -> dict[str, Any] | Non
     """Check v08.2 counter-read envelopes; never invent timing for legacy bundles."""
     if metadata.get("collector_version") != COLLECTOR_VERSION:
         return None
-    if metadata.get("clock_source") not in {"system_utc_monotonic", "synthetic_test"}:
+    if not isinstance(metadata.get("clock_source"), str) or metadata["clock_source"] not in {"system_utc_monotonic", "synthetic_test"}:
         raise BundleError("invalid counter clock provenance")
     windows = metadata.get("counter_intervals")
     if not isinstance(windows, dict) or set(windows) != {"psi", "vmstat"}:
