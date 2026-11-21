@@ -151,6 +151,44 @@ class RuntimePreflight(unittest.TestCase):
         self.assertNotIn(".Env", calls[0][4])
 
 
+    def test_check_excludes_unrelated_dangling_rows(self):
+        old = image()
+        unrelated = "sha256:" + "d" * 64
+        rows = [
+            {"Repository": mod.IMAGE, "Tag": "<none>", "ID": old["Id"]},
+            {"Repository": "<none>", "Tag": "<none>", "ID": unrelated},
+            {"Repository": "ghcr.io/other/app", "Tag": "<none>", "ID": unrelated},
+        ]
+        inspected = []
+
+        def fake_command(args, timeout=45):
+            if args == ["docker", "info"]:
+                return ""
+            if args[:4] == ["docker", "image", "ls", "--all"]:
+                return "\n".join(json.dumps(row) for row in rows) + "\n"
+            self.fail("unexpected Docker operation")
+
+        def fake_info(ids):
+            inspected.extend(ids)
+            return {old["Id"]: old}
+
+        with tempfile.TemporaryDirectory() as td:
+            lock = Path(td) / "lock"
+            lock.touch(mode=0o600)
+            with (mock.patch.object(mod, "LOCK_PATH", lock),
+                  mock.patch.object(mod, "verify_runtime_identity", lambda: None),
+                  mock.patch.object(mod, "verify_lock_metadata", lambda: None),
+                  mock.patch.object(mod, "command", fake_command),
+                  mock.patch.object(mod, "image_set", lambda: {old["Id"], unrelated}),
+                  mock.patch.object(mod, "container_state", lambda: (set(), set(), set())),
+                  mock.patch.object(mod, "volumes", lambda: set()),
+                  mock.patch.object(mod, "inspect_pins", lambda: None),
+                  mock.patch.object(mod, "health", lambda: None),
+                  mock.patch.object(mod, "image_info", fake_info)):
+                mod.run(apply=False)
+        self.assertEqual(inspected, [old["Id"]])
+
+
 class State(unittest.TestCase):
     def test_state_marker_is_atomic_and_blocked_is_sticky(self):
         with tempfile.TemporaryDirectory() as td:
