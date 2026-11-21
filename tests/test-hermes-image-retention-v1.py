@@ -107,6 +107,30 @@ class RuntimePreflight(unittest.TestCase):
             with self.assertRaisesRegex(mod.Stop, "outside_sunday_window"):
                 mod.update_success_today(datetime(2026, 11, 22, 8, tzinfo=timezone.utc))
 
+    def test_container_state_compares_full_docker_ids(self):
+        cid = "a" * 64
+        iid = "sha256:" + "c" * 64
+        calls = []
+
+        def fake_command(argv, timeout=45):
+            calls.append(argv)
+            if argv[:3] == ["docker", "ps", "-aq"]:
+                return cid + "\n"
+            if argv[:3] == ["docker", "ps", "-q"]:
+                return cid + "\n"
+            if argv[:4] == ["docker", "container", "inspect", "--format"]:
+                return cid + "|" + iid + "\n"
+            self.fail("unexpected Docker operation")
+
+        with mock.patch.object(mod, "command", fake_command):
+            ids, running, referenced = mod.container_state()
+        self.assertEqual(ids, {cid})
+        self.assertEqual(running, {cid})
+        self.assertEqual(referenced, {iid})
+        self.assertIn(["docker", "ps", "-aq", "--no-trunc"], calls)
+        self.assertIn(["docker", "ps", "-q", "--no-trunc"], calls)
+        self.assertEqual(len(calls), 3)
+
     def test_image_inspect_requests_metadata_only(self):
         obj = image()
         ident = obj["Id"]
@@ -125,6 +149,44 @@ class RuntimePreflight(unittest.TestCase):
         self.assertEqual(calls[0][:4], ["docker", "image", "inspect", "--format"])
         self.assertNotIn("{{json .}}", calls[0][4])
         self.assertNotIn(".Env", calls[0][4])
+
+
+    def test_check_excludes_unrelated_dangling_rows(self):
+        old = image()
+        unrelated = "sha256:" + "d" * 64
+        rows = [
+            {"Repository": mod.IMAGE, "Tag": "<none>", "ID": old["Id"]},
+            {"Repository": "<none>", "Tag": "<none>", "ID": unrelated},
+            {"Repository": "ghcr.io/other/app", "Tag": "<none>", "ID": unrelated},
+        ]
+        inspected = []
+
+        def fake_command(args, timeout=45):
+            if args == ["docker", "info"]:
+                return ""
+            if args[:4] == ["docker", "image", "ls", "--all"]:
+                return "\n".join(json.dumps(row) for row in rows) + "\n"
+            self.fail("unexpected Docker operation")
+
+        def fake_info(ids):
+            inspected.extend(ids)
+            return {old["Id"]: old}
+
+        with tempfile.TemporaryDirectory() as td:
+            lock = Path(td) / "lock"
+            lock.touch(mode=0o600)
+            with (mock.patch.object(mod, "LOCK_PATH", lock),
+                  mock.patch.object(mod, "verify_runtime_identity", lambda: None),
+                  mock.patch.object(mod, "verify_lock_metadata", lambda: None),
+                  mock.patch.object(mod, "command", fake_command),
+                  mock.patch.object(mod, "image_set", lambda: {old["Id"], unrelated}),
+                  mock.patch.object(mod, "container_state", lambda: (set(), set(), set())),
+                  mock.patch.object(mod, "volumes", lambda: set()),
+                  mock.patch.object(mod, "inspect_pins", lambda: None),
+                  mock.patch.object(mod, "health", lambda: None),
+                  mock.patch.object(mod, "image_info", fake_info)):
+                mod.run(apply=False)
+        self.assertEqual(inspected, [old["Id"]])
 
 
 class State(unittest.TestCase):
@@ -170,7 +232,7 @@ class Execution(unittest.TestCase):
             def fake_command(args, timeout=45):
                 calls.append(tuple(args))
                 if args[:4] == ["docker", "image", "ls", "--all"]:
-                    return json.dumps({"Repository": "<none>", "Tag": "<none>", "ID": old["Id"]}) + "\n"
+                    return json.dumps({"Repository": mod.IMAGE, "Tag": "<none>", "ID": old["Id"]}) + "\n"
                 if args[:3] == ["docker", "image", "rm"]:
                     if fails:
                         raise mod.Stop("synthetic_removal_error")

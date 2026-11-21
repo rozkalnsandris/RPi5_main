@@ -60,8 +60,8 @@ def image_set() -> set[str]:
 
 
 def container_state() -> tuple[set[str], set[str], set[str]]:
-    ids = set(command(["docker", "ps", "-aq"], 30).split())
-    running = set(command(["docker", "ps", "-q"], 30).split())
+    ids = set(command(["docker", "ps", "-aq", "--no-trunc"], 30).split())
+    running = set(command(["docker", "ps", "-q", "--no-trunc"], 30).split())
     require(running <= ids, "running_container_not_listed")
     refs: set[str] = set()
     if ids:
@@ -225,7 +225,7 @@ def run(apply: bool) -> None:
         suspected: set[str] = set()
         for row in listing.splitlines():
             obj = json.loads(row)
-            if obj.get("Repository") == "<none>" and obj.get("Tag") == "<none>":
+            if obj.get("Repository") == IMAGE and obj.get("Tag") == "<none>":
                 ident = obj.get("ID")
                 require(isinstance(ident, str) and ID_RE.fullmatch(ident) is not None,
                         "malformed_image_listing")
