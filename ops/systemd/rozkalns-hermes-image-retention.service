@@ -1,0 +1,32 @@
+[Unit]
+Description=Hermes Deals exact-digest image retention after Sunday RPi5 maintenance
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+After=docker.service rpi5-update.service
+ConditionPathExists=/run/lock/rpi5-maintenance-exclusive.lock
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+TimeoutStartSec=20min
+StateDirectory=rozkalns-hermes-image-retention
+StateDirectoryMode=0700
+ExecStart=/usr/bin/python3 /usr/local/libexec/rozkalns-hermes-image-retention/hermes_image_retention_v1.py --apply
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/rozkalns-hermes-image-retention /run/lock/rpi5-maintenance-exclusive.lock
+SystemCallArchitectures=native
