@@ -88,6 +88,45 @@ class Selection(unittest.TestCase):
         self.assertEqual(mod.select({obj["Id"]: obj}, set(), NOW), [])
 
 
+class RuntimePreflight(unittest.TestCase):
+    def test_sunday_update_must_be_successful_and_current(self):
+        now = datetime(2026, 11, 22, 3, 35, tzinfo=timezone.utc)  # 04:35 CET
+        data = ("Result=success\nExecMainStatus=0\n"
+                "ExecMainExitTimestamp=Sun 2026-11-22 02:30:00 CET\n")
+        with mock.patch.object(mod, "command", lambda argv, timeout=45: data):
+            mod.update_success_today(now)
+        for invalid in (
+            data.replace("Result=success", "Result=failed"),
+            data.replace("2026-11-22 02:30:00", "2026-11-15 02:30:00"),
+            data.replace("02:30:00", "01:30:00"),
+        ):
+            with mock.patch.object(mod, "command", lambda argv, timeout=45: invalid):
+                with self.assertRaises(mod.Stop):
+                    mod.update_success_today(now)
+        with mock.patch.object(mod, "command", lambda argv, timeout=45: data):
+            with self.assertRaisesRegex(mod.Stop, "outside_sunday_window"):
+                mod.update_success_today(datetime(2026, 11, 22, 8, tzinfo=timezone.utc))
+
+    def test_image_inspect_requests_metadata_only(self):
+        obj = image()
+        ident = obj["Id"]
+        raw = "|".join((ident, json.dumps(obj["RepoTags"]),
+                        json.dumps(obj["RepoDigests"]), obj["Created"], obj["Revision"])) + "\n"
+        calls = []
+
+        def fake_command(argv, timeout=45):
+            calls.append(argv)
+            return raw
+
+        with mock.patch.object(mod, "command", fake_command):
+            results = mod.image_info([ident])
+        self.assertEqual(results[ident]["Revision"], obj["Revision"])
+        self.assertEqual(results[ident]["RepoTags"], obj["RepoTags"])
+        self.assertEqual(calls[0][:4], ["docker", "image", "inspect", "--format"])
+        self.assertNotIn("{{json .}}", calls[0][4])
+        self.assertNotIn(".Env", calls[0][4])
+
+
 class State(unittest.TestCase):
     def test_state_marker_is_atomic_and_blocked_is_sticky(self):
         with tempfile.TemporaryDirectory() as td:
