@@ -82,10 +82,23 @@ def volumes() -> set[str]:
 def image_info(ids: list[str]) -> dict[str, dict]:
     if not ids:
         return {}
-    raw = command(["docker", "image", "inspect", *ids], 90)
-    objs = json.loads(raw)
-    require(isinstance(objs, list) and len(objs) == len(ids), "image_inspect_count_drift")
-    mapping = {obj.get("Id"): obj for obj in objs}
+    # Docker's formatted output exposes only these five public-safe metadata
+    # fields; do NOT inspect the full image object (which may expose Env).
+    fmt = '{{.Id}}|{{json .RepoTags}}|{{json .RepoDigests}}|{{.Created}}|{{if .Config.Labels}}{{index .Config.Labels "org.opencontainers.image.revision"}}{{end}}'
+    raw = command(["docker", "image", "inspect", "--format", fmt, *ids], 90)
+    lines = raw.splitlines()
+    require(len(lines) == len(ids), "image_inspect_count_drift")
+    mapping = {}
+    for line in lines:
+        fields = line.split("|", 4)
+        require(len(fields) == 5 and ID_RE.fullmatch(fields[0]) is not None,
+                "image_inspect_malformed")
+        ident, tags, digests, created, revision = fields
+        mapping[ident] = {
+            "Id": ident, "RepoTags": json.loads(tags),
+            "RepoDigests": json.loads(digests), "Created": created,
+            "Revision": revision,
+        }
     require(set(mapping) == set(ids), "image_inspect_id_drift")
     return mapping
 
@@ -101,8 +114,7 @@ def candidate_for(obj: dict, referenced: set[str], now: datetime) -> bool:
         return False
     if set(obj.get("RepoDigests") or ()) != {exact}:
         return False
-    labels = (obj.get("Config") or {}).get("Labels") or {}
-    if not isinstance(labels, dict) or not REV_RE.fullmatch(str(labels.get("org.opencontainers.image.revision", ""))):
+    if not REV_RE.fullmatch(str(obj.get("Revision", ""))):
         return False
     try:
         created = datetime.fromisoformat(obj["Created"].replace("Z", "+00:00"))
