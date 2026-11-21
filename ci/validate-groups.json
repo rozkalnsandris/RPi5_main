@@ -772,6 +772,10 @@
       ],
       [
         "python3",
+        "./tests/test-hermes-image-retention-v1.py"
+      ],
+      [
+        "python3",
         "./tests/test-goatcounter-origin-deploy-v1.py"
       ],
       [
