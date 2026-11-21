@@ -151,7 +151,8 @@ class Execution(unittest.TestCase):
                   mock.patch.object(mod, "volumes", lambda: set()),
                   mock.patch.object(mod, "health", lambda: None),
                   mock.patch.object(mod, "update_success_today", lambda when: None),
-                  mock.patch.object(mod.socket, "gethostname", lambda: mod.HOST)):
+                  mock.patch.object(mod, "verify_runtime_identity", lambda: None),
+                  mock.patch.object(mod, "verify_lock_metadata", lambda: None)):
                 if fails:
                     with self.assertRaisesRegex(mod.Stop, "synthetic_removal_error"):
                         mod.run(apply=True)
