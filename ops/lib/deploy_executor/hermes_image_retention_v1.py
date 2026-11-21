@@ -159,13 +159,13 @@ def update_success_today(now: datetime) -> None:
 
 def inspect_state() -> None:
     root = STATE_DIR.lstat()
-    require(stat.S_ISDIR(root.st_mode) and root.st_uid == 0 and stat.S_IMODE(root.st_mode) == 0o700,
+    require(stat.S_ISDIR(root.st_mode) and root.st_uid == os.geteuid() and stat.S_IMODE(root.st_mode) == 0o700,
             "unsafe_state_directory")
     if STATE_PATH.is_symlink():
         raise Stop("state_symlink")
     if STATE_PATH.exists():
         info = STATE_PATH.lstat()
-        require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600,
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o600,
                 "unsafe_state_file")
         state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
         require(state.get("state") == "DONE" and state.get("schema") == 1,
@@ -192,11 +192,19 @@ def write_state(status: str, manifest: str) -> None:
             tmp.unlink()
 
 
-def run(apply: bool) -> None:
+def verify_runtime_identity() -> None:
     require(socket.gethostname() == HOST and os.geteuid() == 0, "host_or_user_mismatch")
+
+
+def verify_lock_metadata() -> None:
     lock = LOCK_PATH.lstat()
     require(stat.S_ISREG(lock.st_mode) and lock.st_uid == 0 and lock.st_gid == 0 and
             stat.S_IMODE(lock.st_mode) == 0o600, "unsafe_shared_lock")
+
+
+def run(apply: bool) -> None:
+    verify_runtime_identity()
+    verify_lock_metadata()
     lock_fd = os.open(LOCK_PATH, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
     with os.fdopen(lock_fd, "rb+") as fd:
         try:
