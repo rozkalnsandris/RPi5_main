@@ -28,7 +28,7 @@ def image(letter: str = "a", *, age: int = 20, extras: tuple[str, ...] = ()) -> 
         "Id": ident,
         "RepoTags": [ref, *extras],
         "RepoDigests": [ref],
-        "Config": {"Labels": {"org.opencontainers.image.revision": "b" * 40}},
+        "Revision": "b" * 40,
         "Created": (NOW - timedelta(days=age)).isoformat(),
     }
 
@@ -41,7 +41,7 @@ class Selection(unittest.TestCase):
         tagged = image("e")
         tagged["RepoDigests"].append("other")
         badrev = image("f")
-        badrev["Config"]["Labels"]["org.opencontainers.image.revision"] = "not-a-sha"
+        badrev["Revision"] = "not-a-sha"
         objs = {x["Id"]: x for x in [old, young, marked, tagged, badrev]}
         self.assertEqual(mod.select(objs, set(), NOW), [old["Id"]])
 
@@ -72,7 +72,7 @@ class Selection(unittest.TestCase):
             ident = "sha256:" + format(i + 1, "064x")
             ref = mod.IMAGE + "@" + ident
             objs[ident] = {"Id": ident, "RepoTags": [ref], "RepoDigests": [ref],
-                           "Config": {"Labels": {"org.opencontainers.image.revision": "c" * 40}},
+                           "Revision": "c" * 40,
                            "Created": (NOW - timedelta(days=15 + i)).isoformat()}
         selected = mod.select(objs, set(), NOW)
         self.assertEqual(len(selected), mod.MAX_REMOVE)
