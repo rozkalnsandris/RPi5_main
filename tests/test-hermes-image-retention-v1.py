@@ -107,6 +107,30 @@ class RuntimePreflight(unittest.TestCase):
             with self.assertRaisesRegex(mod.Stop, "outside_sunday_window"):
                 mod.update_success_today(datetime(2026, 11, 22, 8, tzinfo=timezone.utc))
 
+    def test_container_state_compares_full_docker_ids(self):
+        cid = "a" * 64
+        iid = "sha256:" + "c" * 64
+        calls = []
+
+        def fake_command(argv, timeout=45):
+            calls.append(argv)
+            if argv[:3] == ["docker", "ps", "-aq"]:
+                return cid + "\n"
+            if argv[:3] == ["docker", "ps", "-q"]:
+                return cid + "\n"
+            if argv[:4] == ["docker", "container", "inspect", "--format"]:
+                return cid + "|" + iid + "\n"
+            self.fail("unexpected Docker operation")
+
+        with mock.patch.object(mod, "command", fake_command):
+            ids, running, referenced = mod.container_state()
+        self.assertEqual(ids, {cid})
+        self.assertEqual(running, {cid})
+        self.assertEqual(referenced, {iid})
+        self.assertIn(["docker", "ps", "-aq", "--no-trunc"], calls)
+        self.assertIn(["docker", "ps", "-q", "--no-trunc"], calls)
+        self.assertEqual(len(calls), 3)
+
     def test_image_inspect_requests_metadata_only(self):
         obj = image()
         ident = obj["Id"]
@@ -170,7 +194,7 @@ class Execution(unittest.TestCase):
             def fake_command(args, timeout=45):
                 calls.append(tuple(args))
                 if args[:4] == ["docker", "image", "ls", "--all"]:
-                    return json.dumps({"Repository": "<none>", "Tag": "<none>", "ID": old["Id"]}) + "\n"
+                    return json.dumps({"Repository": mod.IMAGE, "Tag": "<none>", "ID": old["Id"]}) + "\n"
                 if args[:3] == ["docker", "image", "rm"]:
                     if fails:
                         raise mod.Stop("synthetic_removal_error")
