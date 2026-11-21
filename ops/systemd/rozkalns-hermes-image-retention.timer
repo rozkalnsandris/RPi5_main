@@ -1,0 +1,11 @@
+[Unit]
+Description=Hermes Deals image retention after Sunday RPi5 update
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+AccuracySec=1min
+Persistent=false
+Unit=rozkalns-hermes-image-retention.service
+
+[Install]
+WantedBy=timers.target
