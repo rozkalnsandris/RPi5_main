@@ -1132,6 +1132,10 @@
       ],
       [
         "python3",
+        "./tests/test-balkons-ha-polling-private-collector.py"
+      ],
+      [
+        "python3",
         "./tests/test-balkons-bot-latency-rollout.py"
       ],
       [
