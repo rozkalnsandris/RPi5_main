@@ -1,0 +1,116 @@
+#!/usr/bin/python3 -I
+"""Offline comparison of two *claimed* sanitized Telegram identity proofs.
+
+This utility never accesses HA, RPi5 credentials, processes, or the network.
+An independent, separately authorized private collector must generate each
+HMAC using the SAME fresh private 256-bit key and challenge. Neither the key
+nor token/chat/user IDs may be supplied to this program. Equality of opaque
+claims alone does NOT authenticate their origins or authorize a cutover.
+"""
+from __future__ import annotations
+
+import hmac
+import json
+import re
+import sys
+
+SCHEMA = "rozkalns.balkons-telegram-identity-compare.v1"
+MAX_INPUT = 4096
+PROOF = re.compile(r"[0-9a-f]{64}\Z")
+CHALLENGE = re.compile(r"[0-9a-f]{32}\Z")
+HA_KEYS = frozenset(("origin", "entity_id", "entry_mode", "registry_link_checked",
+                     "challenge", "bot_hmac", "chat_hmac"))
+RPI5_KEYS = frozenset(("origin", "service", "challenge", "bot_hmac", "chat_hmac"))
+
+
+class Blocked(Exception):
+    """Only a fixed public-safe category may leave the verifier."""
+
+
+def require(condition: bool, reason: str) -> None:
+    if not condition:
+        raise Blocked(reason)
+
+
+def compare_evidence(evidence: object) -> dict[str, object]:
+    """Compare opaque claims; never claim their provenance is authenticated."""
+    require(type(evidence) is dict and set(evidence) == {"schema", "ha", "rpi5"},
+            "EVIDENCE_SCHEMA_INVALID")
+    require(evidence["schema"] == SCHEMA, "EVIDENCE_SCHEMA_INVALID")
+    ha, rpi5 = evidence["ha"], evidence["rpi5"]
+    require(type(ha) is dict and set(ha) == HA_KEYS,
+            "HA_EVIDENCE_SHAPE_INVALID")
+    require(type(rpi5) is dict and set(rpi5) == RPI5_KEYS,
+            "RPI5_EVIDENCE_SHAPE_INVALID")
+    require(ha["origin"] == "HA_PRIVATE_COLLECTOR_CLAIM" and
+            rpi5["origin"] == "RPI5_PRIVATE_COLLECTOR_CLAIM",
+            "EVIDENCE_ORIGIN_CLAIM_INVALID")
+    require(ha["entity_id"] == "notify.andris" and
+            ha["entry_mode"] == "Broadcast" and
+            ha["registry_link_checked"] is True,
+            "HA_RECIPIENT_LINK_UNCONFIRMED")
+    require(rpi5["service"] == "balkons-bot.service",
+            "RPI5_SERVICE_UNEXPECTED")
+    for item in (ha, rpi5):
+        require(type(item["challenge"]) is str and
+                CHALLENGE.fullmatch(item["challenge"]) is not None,
+                "CHALLENGE_INVALID")
+        for field in ("bot_hmac", "chat_hmac"):
+            require(type(item[field]) is str and
+                    PROOF.fullmatch(item[field]) is not None,
+                    "PROOF_INVALID")
+    require(hmac.compare_digest(ha["challenge"], rpi5["challenge"]),
+            "CHALLENGE_MISMATCH")
+    require(hmac.compare_digest(ha["bot_hmac"], rpi5["bot_hmac"]),
+            "BOT_IDENTITY_MISMATCH")
+    require(hmac.compare_digest(ha["chat_hmac"], rpi5["chat_hmac"]),
+            "CHAT_IDENTITY_MISMATCH")
+    return {
+        "schema": SCHEMA,
+        "result": "EVIDENCE_CONSISTENT_ORIGIN_UNVERIFIED",
+        "bot_chat_claims_match": True,
+        "ha_registry_link_independently_verified": False,
+        "user_allowlist_verified": False,
+        "cutover_ready": False,
+        "mutation": False,
+    }
+
+
+def _unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    out: dict[str, object] = {}
+    for key, value in pairs:
+        if key in out:
+            raise Blocked("DUPLICATE_JSON_KEY")
+        out[key] = value
+    return out
+
+
+def main() -> int:
+    try:
+        raw = sys.stdin.buffer.read(MAX_INPUT + 1)
+        require(0 < len(raw) <= MAX_INPUT, "INPUT_SIZE_INVALID")
+        evidence = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_keys)
+        result = compare_evidence(evidence)
+        # Matching unauthenticated claims must not produce a success exit.
+        status = 2
+    except Blocked as error:
+        result = {"schema": SCHEMA, "result": "BLOCKED", "reason": str(error),
+                  "cutover_ready": False, "mutation": False}
+        status = 2
+    except (UnicodeError, ValueError, TypeError, RecursionError):
+        result = {"schema": SCHEMA, "result": "BLOCKED",
+                  "reason": "EVIDENCE_INVALID", "cutover_ready": False,
+                  "mutation": False}
+        status = 2
+    except Exception:
+        result = {"schema": SCHEMA, "result": "BLOCKED",
+                  "reason": "INTERNAL_ERROR", "cutover_ready": False,
+                  "mutation": False}
+        status = 2
+    sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n")
+    return status
+
+
+if __name__ == "__main__":
+    sys.dont_write_bytecode = True
+    raise SystemExit(main())
