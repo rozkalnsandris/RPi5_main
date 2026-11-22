@@ -1116,6 +1116,10 @@
       ],
       [
         "python3",
+        "./tests/test-balkons-telegram-identity-compare.py"
+      ],
+      [
+        "python3",
         "./tests/test-balkons-ha-polling-commands.py"
       ],
       [
