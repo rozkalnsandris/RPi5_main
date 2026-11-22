@@ -44,7 +44,9 @@ permission; the existence of the comparator is not that authorization.
   match, **not** that their origins or the HA registry link are authenticated.
 - `BLOCKED` uses fixed reason codes; malformed or mismatched evidence never
   prints source fields. No result prints token, chat ID, user ID, HMAC or key.
-- `cutover_ready` is always `false`. User-ID allowlisting, the exact
+- Exit status is always nonzero (2) until independently authenticated
+  provenance exists; shell callers must never equate claim consistency with
+  authorization. `cutover_ready` is always `false`. User-ID allowlisting, the exact
   `notify.andris` → HA config entry, RPi5 installed-source provenance, active
   MQTT forwarder exclusion and independent `/stop` remain separate gates.
 - This source work does not turn on the inert HA automation, stop the existing

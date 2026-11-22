@@ -91,7 +91,8 @@ def main() -> int:
         require(0 < len(raw) <= MAX_INPUT, "INPUT_SIZE_INVALID")
         evidence = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_keys)
         result = compare_evidence(evidence)
-        status = 0
+        # Matching unauthenticated claims must not produce a success exit.
+        status = 2
     except Blocked as error:
         result = {"schema": SCHEMA, "result": "BLOCKED", "reason": str(error),
                   "cutover_ready": False, "mutation": False}

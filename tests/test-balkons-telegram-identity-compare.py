@@ -115,7 +115,7 @@ class IdentityCompareTests(unittest.TestCase):
         proc = subprocess.run([sys.executable, "-I", str(TOOL)],
                               input=json.dumps(evidence()).encode(),
                               capture_output=True, check=False)
-        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.returncode, 2)
         self.assertFalse(json.loads(proc.stdout)["cutover_ready"])
 
     def test_source_never_reads_protected_runtime_or_network(self):
