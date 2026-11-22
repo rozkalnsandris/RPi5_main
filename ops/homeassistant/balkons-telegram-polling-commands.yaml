@@ -2,7 +2,7 @@
 # Three guards: initial_state false, disabled state trigger, disabled choose.
 # NEW HA UI: omit the reference-list id, HA generates its own on Save.
 # Initial GUI Save may create automation ON; owner-gated Disable if necessary.
-# Replace event entity + chat/user identity placeholders PRIVATELY after LIVE approval.
+# Observed event entity is fixed; replace bot entry + chat/user placeholders PRIVATELY after LIVE approval.
 # Only one Telegram getUpdates poller per bot token (old RPi5 bot must stop first).
 - id: balkons_telegram_polling_commands_staged
   alias: "Balkons: Telegram Polling commands (staged)"
@@ -11,12 +11,15 @@
   triggers:
     - trigger: state
       enabled: false
-      entity_id: event.replace_with_verified_balkons_polling_event
+      entity_id: event.balkona_laistisana_update_event
   conditions:
     - condition: template
       value_template: >-
         {{ trigger.to_state is not none
+           and trigger.to_state.entity_id == 'event.balkona_laistisana_update_event'
            and trigger.to_state.attributes.event_type == 'telegram_command'
+           and trigger.to_state.attributes.bot is mapping
+           and (trigger.to_state.attributes.bot.get('config_entry_id') | default('', true) | string) == 'REPLACE_WITH_VERIFIED_BALKONS_POLLING_CONFIG_ENTRY_ID'
            and trigger.to_state.attributes.command is string
            and (trigger.to_state.attributes.chat_id | string) == 'REPLACE_WITH_APPROVED_CHAT_ID'
            and (trigger.to_state.attributes.user_id | string) == 'REPLACE_WITH_APPROVED_USER_ID'

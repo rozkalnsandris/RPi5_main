@@ -14,7 +14,10 @@ COMMANDS = (("/stop", "stop"), ("/mitrums", "mitrums"),
             ("/statuss", "statuss"), ("/raw", "raw"))
 GUARDS = (
     "trigger.to_state is not none",
+    "trigger.to_state.entity_id == 'event.balkona_laistisana_update_event'",
     "trigger.to_state.attributes.event_type == 'telegram_command'",
+    "trigger.to_state.attributes.bot is mapping",
+    "(trigger.to_state.attributes.bot.get('config_entry_id') | default('', true) | string) == 'REPLACE_WITH_VERIFIED_BALKONS_POLLING_CONFIG_ENTRY_ID'",
     "trigger.to_state.attributes.command is string",
     "(trigger.to_state.attributes.chat_id | string) == 'REPLACE_WITH_APPROVED_CHAT_ID'",
     "(trigger.to_state.attributes.user_id | string) == 'REPLACE_WITH_APPROVED_USER_ID'",
@@ -32,7 +35,7 @@ def validate_contract(source: str) -> None:
     for item in (
         "SOURCE ONLY (#1525)", "- id: balkons_telegram_polling_commands_staged",
         "  initial_state: false\n", "    - trigger: state\n      enabled: false\n",
-        "      entity_id: event.replace_with_verified_balkons_polling_event\n",
+        "      entity_id: event.balkona_laistisana_update_event\n",
         "    - choose:\n", "      default: []\n      enabled: false\n",
         "  mode: parallel\n", "  max: 10\n",
     ):
@@ -129,6 +132,8 @@ class PollingSourceTests(unittest.TestCase):
         self.assertIn("initial_state: false", ui)
         self.assertIn("  - trigger: state\n    enabled: false\n", ui)
         self.assertIn("    default: []\n    enabled: false\n", ui)
+        self.assertIn("REPLACE_WITH_VERIFIED_BALKONS_POLLING_CONFIG_ENTRY_ID", ui)
+        self.assertIn("entity_id: event.balkona_laistisana_update_event", ui)
         self.assertIn("REPLACE_WITH_APPROVED_CHAT_ID", ui)
         self.assertIn("REPLACE_WITH_APPROVED_USER_ID", ui)
         self.assertEqual(ui.count("enabled: false"), 2)
@@ -140,7 +145,7 @@ class PollingSourceTests(unittest.TestCase):
         self.assertEqual(doc.count(marker), 1)
         for token in (
             "initial_state: false", "enabled: false", "bez `id:`",
-            "Composite STRICT LIVE", "chat_id", "user_id",
+            "Composite STRICT LIVE", "chat_id", "user_id", "config_entry_id",
             "STOP", "bez retry", "getUpdates", "NO MQTT publish",
         ):
             self.assertIn(token, doc.split(marker, 1)[1])
@@ -157,11 +162,15 @@ class PollingSourceTests(unittest.TestCase):
         changes = (
             ("initial_state: false", "initial_state: true"),
             ("'REPLACE_WITH_APPROVED_CHAT_ID'", "'0'"),
+            ("'REPLACE_WITH_VERIFIED_BALKONS_POLLING_CONFIG_ENTRY_ID'", "'0'"),
+            ("trigger.to_state.attributes.bot is mapping", "true"),
+            ("trigger.to_state.entity_id == 'event.balkona_laistisana_update_event'", "true"),
+            ("(trigger.to_state.attributes.bot.get('config_entry_id') | default('', true) | string) == 'REPLACE_WITH_VERIFIED_BALKONS_POLLING_CONFIG_ENTRY_ID'", "true"),
             ("'REPLACE_WITH_APPROVED_USER_ID'", "'0'"),
             ("event_type == 'telegram_command'", "event_type == 'telegram_text'"),
             ("trigger.to_state.attributes.command is string", "true"),
             ("(trigger.to_state.attributes.args | default([], true) | length) == 0", "true"),
-            ("event.replace_with_verified_balkons_polling_event", "event.other"),
+            ("event.balkona_laistisana_update_event", "event.other"),
         )
         for before, after in changes:
             with self.subTest(before=before):
