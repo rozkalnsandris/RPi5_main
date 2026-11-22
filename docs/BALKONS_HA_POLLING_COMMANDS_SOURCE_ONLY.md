@@ -15,7 +15,7 @@
 viens `state` trigeris ar `enabled: false` un galvenā `choose` darbība
 ar `enabled: false`), nevis uzinstalēta Polling integrācija.
 
-Pirms owner-autorizētas LIVE izmaiņas HA UI **privāti** jāaizstāj `event.replace_with_verified_balkons_polling_event` ar reālu Telegram Polling event entity un `REPLACE_WITH_APPROVED_CHAT_ID` / `REPLACE_WITH_APPROVED_USER_ID` ar pareizu sūtītāja identitāti. Neievietot identifikatorus publiskā GitHub. `notify.andris` ir iepriekš izmēģināta entītija, bet pēc Polling pārkonfigurācijas jāpārbauda atkārtoti.
+Reālās HA event entītijas identifikators ir `event.balkona_laistisana_update_event`; tas jau ir fiksēts source. Pirms owner-autorizētas LIVE izmaiņas HA UI **privāti** jāaizstāj `REPLACE_WITH_VERIFIED_BALKONS_POLLING_CONFIG_ENTRY_ID`, `REPLACE_WITH_APPROVED_CHAT_ID` un `REPLACE_WITH_APPROVED_USER_ID` ar neatkarīgi pārbaudītām atbilstošā bota, čata un sūtītāja vērtībām. Neievietot identifikatorus publiskā GitHub. `notify.andris` ir iepriekš izmēģināta entītija, bet pēc Polling pārkonfigurācijas jāpārbauda atkārtoti.
 
 Tikai pareizs `telegram_command` notikums, konkrētais chat + user, un tukši `args` ļauj izvērtēt komandu. Citas komandas pēc noklusējuma nedara neko.
 
@@ -60,8 +60,9 @@ Jaunai HA UI automation veido vienu YAML mapping **bez `id:`**:
 pilnībā izlaist GitHub `- id:` rindu, atlikušajām rindām
 noņemt divas atkāpes atstarpes; HA piešķir ģenerētu ID.
 **Šis source nav gatavs LIVE instalācijai ar placeholder datiem.**
-Privāti jāpārbauda pareizā Telegram Polling `event` entītija,
-atļautā `chat_id` un `user_id`, kā arī `notify.andris` piesaiste.
+Source jau nosaka novēroto Telegram Polling `event` entītiju.
+Privāti jāpārbauda attiecīgā bota `config_entry_id`, atļautā
+`chat_id` un `user_id`, kā arī `notify.andris` piesaiste.
 Reālās vērtības aizstāj tikai precīzi autorizētā HA UI darbībā,
 nekad publiskā GitHub. Neieslēgt otro `getUpdates` klientu.
 
@@ -81,3 +82,35 @@ Polling pārslēgšana un sūkņa/ESP32 izmaiņas nav autorizētas.
 Home Assistant: https://www.home-assistant.io/docs/automation/trigger/ ;
 https://www.home-assistant.io/docs/automation/building-blocks/ ;
 https://www.home-assistant.io/docs/automation/yaml/ .
+
+## Native Polling bota identitātes filtrs (source only, 2026-11-22)
+
+Vienkāršākais HA-native variants: esošajai **atspējotajai** YAML
+komandu automatizācijai pievienots noteikums, ka `trigger.to_state`
+ir precīzā `event.balkona_laistisana_update_event` entītija, `bot`
+atribūts ir `mapping` un `bot.config_entry_id` precīzi sakrīt ar
+**atsevišķi un privāti apstiprinātu** `Polling` bota config entry ID.
+Pārbaude turpina prasīt `telegram_command`, atļauto `chat_id`,
+`user_id` un tukšus `args`. Ja `bot` trūkst, tas nav mapping vai
+`config_entry_id` trūkst/neatbilst, nosacījums neizpildās.
+Reālie ID nav source; placeholder
+`REPLACE_WITH_VERIFIED_BALKONS_POLLING_CONFIG_ENTRY_ID` jāaizstāj
+**tikai privāti**, atsevišķi apstiprinātā HA UI darbībā.
+Tas nav lietotāja identitātes/provenance pierādījums pats par sevi.
+
+Šis ir tikai **GitHub source**, nevis instalētās HA automation izmaiņa.
+HA UI iepriekš bija izveidota
+`automation.balkons_telegram_polling_commands_staged`
+(ID `1795378925536`), un READONLY pārbaudē tā bija `OFF`, ar
+atspējotu trigeri un `choose` darbību. Pirms jebkura HA Save jāverificē
+faktiskais instalētais YAML un privāti identifikatori; šis source
+nedod Save, enable, Telegram vai MQTT autorizāciju. Vienā botā nedrīkst
+darbināt otru `getUpdates` saņēmēju. `/laist*` paliek DENY,
+`/stop` ārkārtas piekļuve jāverificē patstāvīgi, un
+`notify.andris` piesaiste vēl nav neatkarīgi apliecināta.
+
+Avota pamatojums: Home Assistant Core `2026.11.2`
+`homeassistant/components/telegram_bot/bot.py` pievieno
+`event_data["bot"]["config_entry_id"]`; `event.py` šo payload
+pievieno event entītijai. Python collector instalēšana šim
+native filtram **nav vajadzīga**.
