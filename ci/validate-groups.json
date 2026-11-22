@@ -1120,6 +1120,10 @@
       ],
       [
         "python3",
+        "./tests/test-balkons-telegram-identity-claim.py"
+      ],
+      [
+        "python3",
         "./tests/test-balkons-ha-polling-commands.py"
       ],
       [
