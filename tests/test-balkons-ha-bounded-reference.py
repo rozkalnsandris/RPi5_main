@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline structural and actual Jinja predicate tests, never execute HA actions."""
 import re
+import math
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -26,7 +27,9 @@ TZ = ZoneInfo('Europe/Berlin')
 SENSORS = [1, 3, 4, 5, 6, 7, 8, 9, 10, 12]
 RID = '0123456789abcdef'
 TICKET = '0123456789abcdef00000001'
-OFFER = f'offer:{RID}:{TICKET}'
+REVISION = '76e4f83f9849ea6e63a1670e4f031c6737d6916a'
+REQUEST = f'ticket45:{RID}'
+OFFER = f'offer2:{RID}:{TICKET}:{REVISION}:DDDWWWWWWU:off'
 GUARD = {'condition': 'template', 'value_template': '{{ false }}'}
 
 
@@ -60,12 +63,15 @@ class Reference(unittest.TestCase):
         self.env.filters['regex_match'] = lambda value, pattern: re.match(pattern, value) is not None
         self.env.globals.update(
             now=lambda: self.clock, as_timestamp=lambda dt: dt.timestamp(),
+            is_number=lambda v: isinstance(v, (int, float)) and math.isfinite(v),
             states=lambda key: self.states.get(key, 'unknown'),
             state_attr=lambda key, attr: self.attrs.get(key, {}).get(attr),
             is_state=lambda key, value: self.states.get(key, 'unknown') == value)
         self.v = dict(marker=MARKER, pump=PUMP, arm=ARM, pending=PENDING, mailbox=MAIL,
-                      day='2026-11-24', old_date='2026-11-23', sensor_ids=SENSORS,
-                      request_id=RID, offer=OFFER, ticket=TICKET,
+                      day='2026-11-24', old_date='2026-11-23',
+                      request_payload=REQUEST, expected_revision=REVISION, offer=OFFER,
+                      start_payload='start45:' + TICKET, on_ack='on:' + TICKET,
+                      off_ack='off:' + TICKET,
                       request_at=self.clock.timestamp(), dispatch_at=self.clock.timestamp(),
                       wait=SimpleNamespace(completed=True), on_seen=True, off_seen=True)
         snap = next(s['variables']['snapshot'] for s in self.seq
@@ -101,7 +107,7 @@ class Reference(unittest.TestCase):
         pubs = [x['data'] for x in all_actions if x['action'] == 'mqtt.publish']
         self.assertEqual(len(pubs), 4)
         self.assertEqual([p['payload'] for p in pubs],
-                         ["{{ 'ticket45:' ~ request_id }}", "{{ 'start45:' ~ ticket }}", 'OFF', 'OFF'])
+                         ["{{ request_payload }}", "{{ start_payload }}", 'OFF', 'OFF'])
         for p in pubs:
             self.assertEqual(set(p), {'topic', 'payload', 'qos', 'retain'})
             self.assertEqual(p['topic'], TOPIC)
@@ -129,17 +135,24 @@ class Reference(unittest.TestCase):
 
     def test_preview_is_only_negative_filter(self):
         pred = next(s['value_template'] for s in self.seq if 'preview is mapping' in s.get('value_template', ''))
-        good = dict(dry_run=True, live_authorized=False, decision='would_water', candidate_seconds=45)
+        good = dict(dry_run=True, live_authorized=False, decision='would_water',
+                    candidate_seconds=45, minimum_c=8)
         self.assertIs(self.render(pred, preview=good), True)
+        for decision in ('block_sensor_value', 'block_sensor_coverage', 'skip_dry_quorum', 'skip_moist'):
+            self.assertIs(self.render(pred, preview=good | {'decision': decision}), True)
         for preview in (None, {}, good | {'decision': 'block_frost'},
-                        good | {'live_authorized': True}, good | {'candidate_seconds': 180}):
+                        good | {'decision': 'block_day'}, good | {'decision': 'block_pump'},
+                        good | {'live_authorized': True}, good | {'candidate_seconds': 180},
+                        *(good | {'minimum_c': v} for v in (None, 2, 1, True, '8', float('inf'), float('nan')))):
             self.assertIs(self.render(pred, preview=preview), False)
 
     def test_offer_freeze_cancellation_expiry(self):
         pred = next(s['value_template'] for s in self.seq
                     if 'offer | length' in s.get('value_template', ''))
         self.assertIs(self.render(pred), True)
-        for bad in (OFFER + '\n', OFFER.upper(), 'offer:ffffffffffffffff:' + TICKET,
+        for bad in (OFFER + '\n', OFFER.upper(), f'offer:{RID}:{TICKET}',
+                    OFFER.replace(RID, 'ffffffffffffffff'), OFFER.replace(REVISION, '0' * 40),
+                    OFFER.replace(TICKET, TICKET.upper()), OFFER.replace('DDDWWWWWWU', 'DDDWWWWWXX'),
                     OFFER[:-1], OFFER[:-1] + 'g', 'on:' + TICKET):
             self.assertIs(self.render(pred, offer=bad), False)
         self.states[ARM] = 'off'
@@ -160,16 +173,44 @@ class Reference(unittest.TestCase):
         self.assertIs(self.render(pred), True)
         for key, value in ((ARM, 'off'), (PENDING, 'off'), (PUMP, 'on'),
                            (MARKER, '2026-11-23'), (MAIL, OFFER[:-1]+'2'),
-                           ('sensor.balkona_laistisana_puke_5', 'mitrs'), (WEATHER, 'unknown')):
+                           (WEATHER, 'unknown')):
             original = self.states[key]
             self.states[key] = value
             self.assertIs(self.render(pred), False, key)
             self.states[key] = original
+        self.states['sensor.balkona_laistisana_puke_5'] = 'mitrs'
+        self.assertIs(self.render(pred), True)
         self.attrs[MARKER]['has_time'] = True
         self.assertIs(self.render(pred), False)
         self.attrs[MARKER]['has_time'] = False
         self.clock += timedelta(days=1)
         self.assertIs(self.render(pred), False)
+
+    def test_fresh_moisture_policy_and_opaque_hex(self):
+        pred = next(s['value_template'] for s in self.seq
+                    if s.get('alias', '').startswith('Evaluate only the ten fresh'))
+        for codes in ('DDDWWWWWWU', 'DDDDWWWWUU', 'DDDDDDDDDD'):
+            self.assertIs(self.render(pred, offer=OFFER[:90] + codes + ':off'), True, codes)
+        for codes in ('DDWWWWWWWW', 'DWWWWWWWWW', 'DDDDWWWUUU', 'DDDDWWWWWM',
+                      'DDDWWWWWWX', 'DDDWWWWWW'):
+            self.assertIs(self.render(pred, offer=OFFER[:90] + codes + ':off'), False, codes)
+        variables = next(s['variables'] for s in self.seq
+                         if 'start_payload' in s.get('variables', {}))
+        for opaque in ('123456789012345678901234', '000000000000000000000001',
+                       '1234567890123456789012e3'):
+            offer = OFFER[:24] + opaque + OFFER[48:]
+            self.assertEqual(self.render(variables['start_payload'], offer=offer), 'start45:' + opaque)
+            self.assertEqual(self.render(variables['on_ack'], offer=offer), 'on:' + opaque)
+            self.assertEqual(self.render(variables['off_ack'], offer=offer), 'off:' + opaque)
+        req = next(s['variables']['request_payload'] for s in self.seq
+                   if 'request_payload' in s.get('variables', {}))
+        self.env.filters['random'] = lambda _seq: 0x1234
+        self.assertEqual(self.render(req), 'ticket45:1234123412341234')
+        guard = next(s['value_template'] for s in self.seq
+                     if 'request_payload | length' in s.get('value_template', ''))
+        self.assertIs(self.render(guard), False)
+        self.states[MAIL] = 'unknown'
+        self.assertIs(self.render(guard), True)
 
     def test_ack_correlation_and_deadline(self):
         on = next(s['variables']['on_seen'] for s in self.seq

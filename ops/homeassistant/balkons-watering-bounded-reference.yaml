@@ -40,27 +40,29 @@ script:
           mailbox: sensor.balkons_ha45_reply_reference
           day: "{{ now().date().isoformat() }}"
           old_date: "{{ states(marker) }}"
-          sensor_ids: [1, 3, 4, 5, 6, 7, 8, 9, 10, 12]
+          expected_revision: '76e4f83f9849ea6e63a1670e4f031c6737d6916a'
           on_seen: false
           off_seen: false
       - variables:
           snapshot: >-
-            {%- set ns = namespace(values=[]) -%}
-            {%- for i in sensor_ids -%}
-              {%- set ns.values = ns.values + [states('sensor.balkona_laistisana_puke_' ~ i)] -%}
-            {%- endfor -%}
-            {{ ns.values + [states('weather.forecast_home'),
-                            state_attr('weather.forecast_home', 'temperature'),
-                            state_attr('weather.forecast_home', 'temperature_unit')] }}
+            {{ [states('weather.forecast_home'),
+                 state_attr('weather.forecast_home', 'temperature'),
+                 state_attr('weather.forecast_home', 'temperature_unit')] }}
       - action: script.balkons_watering_dry_run
         response_variable: preview
       - condition: template
         value_template: >-
           {{ preview is mapping and preview.get('dry_run') is sameas true
              and preview.get('live_authorized') is sameas false
-             and preview.get('decision') == 'would_water'
-             and preview.get('candidate_seconds') == 45 }}
-      - alias: Fresh device-session telemetry proof not implemented
+             and preview.get('decision') in
+                 ['would_water', 'block_sensor_value', 'block_sensor_coverage',
+                  'skip_dry_quorum', 'skip_moist']
+             and preview.get('candidate_seconds') == 45
+             and preview.get('minimum_c') is number
+             and preview.get('minimum_c') is not boolean
+             and is_number(preview.get('minimum_c'))
+             and preview.get('minimum_c') > 2 }}
+      - alias: Runtime session and transport proof not established
         condition: template
         value_template: "{{ false }}"
       - condition: template
@@ -78,22 +80,28 @@ script:
         value_template: "{{ is_state(pending, 'on') and is_state(arm, 'on') and is_state(pump, 'off') }}"
       - variables:
           # Correlation only, not authentication. Runtime uniqueness still requires proof.
-          request_id: >-
-            {{ '%04x%04x%04x%04x' | format(range(65536)|random, range(65536)|random,
-                                          range(65536)|random, range(65536)|random) }}
+          # Prefix preserves opaque hex even when it looks like a number.
+          request_payload: >-
+            {{ 'ticket45:%04x%04x%04x%04x' | format(range(65536)|random, range(65536)|random,
+                                                   range(65536)|random, range(65536)|random) }}
           request_at: "{{ as_timestamp(now()) }}"
+      - condition: template
+        value_template: >-
+          {{ request_payload | length == 25
+             and request_payload | regex_match('^ticket45:[0-9a-f]{16}$')
+             and not states(mailbox).startswith('offer2:' ~ request_payload[9:] ~ ':')
+             and is_state(arm, 'on') and is_state(pending, 'on') and is_state(pump, 'off') }}
       - action: mqtt.publish
         data:
           topic: balkons/sukna/komanda
-          payload: "{{ 'ticket45:' ~ request_id }}"
+          payload: "{{ request_payload }}"
           qos: 1
           retain: false
       # The MQTT sensor listener must already be subscribed before ticket dispatch.
       - wait_template: >-
           {% set reply = states(mailbox) %}
           {{ not is_state(arm, 'on') or not is_state(pending, 'on')
-             or (reply | length == 47 and reply[:23] == 'offer:' ~ request_id ~ ':'
-                 and reply[23:] | regex_match('^[0-9a-f]{24}$')) }}
+             or reply.startswith('offer2:' ~ request_payload[9:] ~ ':') }}
         timeout: "00:00:05"
         continue_on_timeout: false
       - variables:
@@ -101,11 +109,22 @@ script:
       - condition: template
         value_template: >-
           {{ wait.completed and is_state(arm, 'on') and is_state(pending, 'on')
-             and offer | length == 47 and offer[:23] == 'offer:' ~ request_id ~ ':'
-             and offer[23:] | regex_match('^[0-9a-f]{24}$')
+             and offer | length == 104
+             and offer[:24] == 'offer2:' ~ request_payload[9:] ~ ':'
+             and offer[24:] | regex_match('^[0-9a-f]{24}:[0-9a-f]{40}:[DWMU]{10}:off$')
+             and offer[49:89] == expected_revision
              and 0 <= as_timestamp(now()) - request_at < 8 }}
+      - alias: Evaluate only the ten fresh device sample codes
+        condition: template
+        value_template: >-
+          {%- set codes = offer[90:100] -%}
+          {{ codes | length == 10 and codes | regex_match('^[DWMU]{10}$')
+             and codes.count('M') == 0 and codes.count('U') <= 2
+             and codes.count('D') >= 2 and codes.count('W') + codes.count('U') < 8 }}
       - variables:
-          ticket: "{{ offer[23:] }}"
+          start_payload: "{{ 'start45:' ~ offer[24:48] }}"
+          on_ack: "{{ 'on:' ~ offer[24:48] }}"
+          off_ack: "{{ 'off:' ~ offer[24:48] }}"
       - condition: template
         value_template: >-
           {{ now().tzinfo | string == 'Europe/Berlin' and now().date().isoformat() == day
@@ -120,13 +139,9 @@ script:
       - alias: Recheck snapshot, marker, clock, admission and exact frozen offer
         condition: template
         value_template: >-
-          {%- set ns = namespace(values=[]) -%}
-          {%- for i in sensor_ids -%}
-            {%- set ns.values = ns.values + [states('sensor.balkona_laistisana_puke_' ~ i)] -%}
-          {%- endfor -%}
-          {% set current = ns.values + [states('weather.forecast_home'),
-                                       state_attr('weather.forecast_home', 'temperature'),
-                                       state_attr('weather.forecast_home', 'temperature_unit')] %}
+          {%- set current = [states('weather.forecast_home'),
+                             state_attr('weather.forecast_home', 'temperature'),
+                             state_attr('weather.forecast_home', 'temperature_unit')] -%}
           {{ current == snapshot and now().tzinfo | string == 'Europe/Berlin'
              and now().date().isoformat() == day and states(marker) == day
              and state_attr(marker, 'has_date') is sameas true
@@ -142,17 +157,17 @@ script:
         continue_on_error: true
         data:
           topic: balkons/sukna/komanda
-          payload: "{{ 'start45:' ~ ticket }}"
+          payload: "{{ start_payload }}"
           qos: 1
           retain: false
       - wait_template: >-
           {{ not is_state(arm, 'on') or not is_state(pending, 'on')
-             or states(mailbox) == 'on:' ~ ticket or states(mailbox) == 'off:' ~ ticket }}
+             or states(mailbox) == on_ack or states(mailbox) == off_ack }}
         timeout: "00:00:05"
         continue_on_timeout: true
       - variables:
           on_seen: >-
-            {{ wait.completed and states(mailbox) == 'on:' ~ ticket
+            {{ wait.completed and states(mailbox) == on_ack
                and is_state(arm, 'on') and is_state(pending, 'on')
                and 0 <= as_timestamp(now()) - dispatch_at <= 5 }}
       - if:
@@ -161,13 +176,13 @@ script:
         then:
           - wait_template: >-
               {{ not is_state(arm, 'on') or not is_state(pending, 'on')
-                 or (states(mailbox) == 'off:' ~ ticket and is_state(pump, 'off')) }}
+                 or (states(mailbox) == off_ack and is_state(pump, 'off')) }}
             timeout:
               seconds: "{{ [0, [45, 45 - (as_timestamp(now()) - dispatch_at)] | min] | max }}"
             continue_on_timeout: true
           - variables:
               off_seen: >-
-                {{ wait.completed and states(mailbox) == 'off:' ~ ticket
+                {{ wait.completed and states(mailbox) == off_ack
                    and is_state(pump, 'off') and is_state(arm, 'on')
                    and is_state(pending, 'on')
                    and 0 <= as_timestamp(now()) - dispatch_at <= 45 }}
@@ -175,7 +190,7 @@ script:
           - condition: template
             value_template: >-
               {{ on_seen and off_seen and is_state(arm, 'on') and is_state(pending, 'on')
-                 and is_state(pump, 'off') and states(mailbox) == 'off:' ~ ticket
+                 and is_state(pump, 'off') and states(mailbox) == off_ack
                  and now().tzinfo | string == 'Europe/Berlin'
                  and now().date().isoformat() == day and states(marker) == day
                  and state_attr(marker, 'has_date') is sameas true
@@ -199,7 +214,7 @@ script:
                     payload: "OFF"
                     qos: 1
                     retain: false
-                - wait_template: "{{ states(mailbox) == 'off:' ~ ticket and is_state(pump, 'off') }}"
+                - wait_template: "{{ states(mailbox) == off_ack and is_state(pump, 'off') }}"
                   timeout: "00:00:05"
                   continue_on_timeout: true
               until:
