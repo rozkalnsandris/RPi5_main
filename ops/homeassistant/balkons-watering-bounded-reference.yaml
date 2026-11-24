@@ -1,0 +1,247 @@
+# SOURCE REFERENCE ONLY. Do not install or enable; no release authority.
+# Both script entry points and the scheduler are hard-inhibited independently.
+# Existing HA entities/scripts/Telegram automations must not be replaced.
+input_boolean:
+  balkons_watering_arm_reference:
+    name: Balkons watering arm reference
+    initial: false
+  balkons_watering_pending_reference:
+    name: Balkons watering incomplete attempt reference
+    initial: true
+
+mqtt:
+  sensor:
+    - name: Balkons HA45 reply reference
+      unique_id: balkons_ha45_reply_reference
+      state_topic: balkons/ha45/reply
+      qos: 0
+      expire_after: 60
+      force_update: true
+
+script:
+  balkons_watering_bounded_reference:
+    alias: Balkons bounded watering reference (INHIBITED)
+    mode: single
+    sequence:
+      - alias: Source release prohibited
+        condition: template
+        value_template: "{{ false }}"
+      - condition: state
+        entity_id: input_boolean.balkons_watering_arm_reference
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.balkons_watering_pending_reference
+        state: "off"
+      - variables:
+          marker: input_datetime.balkons_last_watering_attempt
+          pump: switch.balkona_laistisana_suknis
+          arm: input_boolean.balkons_watering_arm_reference
+          pending: input_boolean.balkons_watering_pending_reference
+          mailbox: sensor.balkons_ha45_reply_reference
+          day: "{{ now().date().isoformat() }}"
+          old_date: "{{ states(marker) }}"
+          sensor_ids: [1, 3, 4, 5, 6, 7, 8, 9, 10, 12]
+          on_seen: false
+          off_seen: false
+      - variables:
+          snapshot: >-
+            {%- set ns = namespace(values=[]) -%}
+            {%- for i in sensor_ids -%}
+              {%- set ns.values = ns.values + [states('sensor.balkona_laistisana_puke_' ~ i)] -%}
+            {%- endfor -%}
+            {{ ns.values + [states('weather.forecast_home'),
+                            state_attr('weather.forecast_home', 'temperature'),
+                            state_attr('weather.forecast_home', 'temperature_unit')] }}
+      - action: script.balkons_watering_dry_run
+        response_variable: preview
+      - condition: template
+        value_template: >-
+          {{ preview is mapping and preview.get('dry_run') is sameas true
+             and preview.get('live_authorized') is sameas false
+             and preview.get('decision') == 'would_water'
+             and preview.get('candidate_seconds') == 45 }}
+      - alias: Fresh device-session telemetry proof not implemented
+        condition: template
+        value_template: "{{ false }}"
+      - condition: template
+        value_template: >-
+          {{ now().tzinfo | string == 'Europe/Berlin'
+             and now().date().isoformat() == day and states(marker) == old_date
+             and old_date < day and state_attr(marker, 'has_date') is sameas true
+             and state_attr(marker, 'has_time') is sameas false
+             and is_state(pump, 'off') and is_state(arm, 'on') and is_state(pending, 'off') }}
+      # Latch before any protocol dispatch. Any abort leaves it blocked.
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.balkons_watering_pending_reference
+      - condition: template
+        value_template: "{{ is_state(pending, 'on') and is_state(arm, 'on') and is_state(pump, 'off') }}"
+      - variables:
+          # Correlation only, not authentication. Runtime uniqueness still requires proof.
+          request_id: >-
+            {{ '%04x%04x%04x%04x' | format(range(65536)|random, range(65536)|random,
+                                          range(65536)|random, range(65536)|random) }}
+          request_at: "{{ as_timestamp(now()) }}"
+      - action: mqtt.publish
+        data:
+          topic: balkons/sukna/komanda
+          payload: "{{ 'ticket45:' ~ request_id }}"
+          qos: 1
+          retain: false
+      # The MQTT sensor listener must already be subscribed before ticket dispatch.
+      - wait_template: >-
+          {% set reply = states(mailbox) %}
+          {{ not is_state(arm, 'on') or not is_state(pending, 'on')
+             or (reply | length == 47 and reply[:23] == 'offer:' ~ request_id ~ ':'
+                 and reply[23:] | regex_match('^[0-9a-f]{24}$')) }}
+        timeout: "00:00:05"
+        continue_on_timeout: false
+      - variables:
+          offer: "{{ states(mailbox) }}"
+      - condition: template
+        value_template: >-
+          {{ wait.completed and is_state(arm, 'on') and is_state(pending, 'on')
+             and offer | length == 47 and offer[:23] == 'offer:' ~ request_id ~ ':'
+             and offer[23:] | regex_match('^[0-9a-f]{24}$')
+             and 0 <= as_timestamp(now()) - request_at < 8 }}
+      - variables:
+          ticket: "{{ offer[23:] }}"
+      - condition: template
+        value_template: >-
+          {{ now().tzinfo | string == 'Europe/Berlin' and now().date().isoformat() == day
+             and states(marker) == old_date and state_attr(marker, 'has_date') is sameas true
+             and state_attr(marker, 'has_time') is sameas false and is_state(pump, 'off')
+             and is_state(arm, 'on') and is_state(pending, 'on') and states(mailbox) == offer }}
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.balkons_last_watering_attempt
+        data:
+          date: "{{ day }}"
+      - alias: Recheck snapshot, marker, clock, admission and exact frozen offer
+        condition: template
+        value_template: >-
+          {%- set ns = namespace(values=[]) -%}
+          {%- for i in sensor_ids -%}
+            {%- set ns.values = ns.values + [states('sensor.balkona_laistisana_puke_' ~ i)] -%}
+          {%- endfor -%}
+          {% set current = ns.values + [states('weather.forecast_home'),
+                                       state_attr('weather.forecast_home', 'temperature'),
+                                       state_attr('weather.forecast_home', 'temperature_unit')] %}
+          {{ current == snapshot and now().tzinfo | string == 'Europe/Berlin'
+             and now().date().isoformat() == day and states(marker) == day
+             and state_attr(marker, 'has_date') is sameas true
+             and state_attr(marker, 'has_time') is sameas false and is_state(pump, 'off')
+             and is_state(arm, 'on') and is_state(pending, 'on') and states(mailbox) == offer
+             and 0 <= as_timestamp(now()) - request_at < 8 }}
+      - alias: No start until separate source release proves freshness and cancellation
+        condition: template
+        value_template: "{{ false }}"
+      - variables:
+          dispatch_at: "{{ as_timestamp(now()) }}"
+      - action: mqtt.publish
+        continue_on_error: true
+        data:
+          topic: balkons/sukna/komanda
+          payload: "{{ 'start45:' ~ ticket }}"
+          qos: 1
+          retain: false
+      - wait_template: >-
+          {{ not is_state(arm, 'on') or not is_state(pending, 'on')
+             or states(mailbox) == 'on:' ~ ticket or states(mailbox) == 'off:' ~ ticket }}
+        timeout: "00:00:05"
+        continue_on_timeout: true
+      - variables:
+          on_seen: >-
+            {{ wait.completed and states(mailbox) == 'on:' ~ ticket
+               and is_state(arm, 'on') and is_state(pending, 'on')
+               and 0 <= as_timestamp(now()) - dispatch_at <= 5 }}
+      - if:
+          - condition: template
+            value_template: "{{ on_seen }}"
+        then:
+          - wait_template: >-
+              {{ not is_state(arm, 'on') or not is_state(pending, 'on')
+                 or (states(mailbox) == 'off:' ~ ticket and is_state(pump, 'off')) }}
+            timeout:
+              seconds: "{{ [0, [45, 45 - (as_timestamp(now()) - dispatch_at)] | min] | max }}"
+            continue_on_timeout: true
+          - variables:
+              off_seen: >-
+                {{ wait.completed and states(mailbox) == 'off:' ~ ticket
+                   and is_state(pump, 'off') and is_state(arm, 'on')
+                   and is_state(pending, 'on')
+                   and 0 <= as_timestamp(now()) - dispatch_at <= 45 }}
+      - if:
+          - condition: template
+            value_template: >-
+              {{ on_seen and off_seen and is_state(arm, 'on') and is_state(pending, 'on')
+                 and is_state(pump, 'off') and states(mailbox) == 'off:' ~ ticket
+                 and now().tzinfo | string == 'Europe/Berlin'
+                 and now().date().isoformat() == day and states(marker) == day
+                 and state_attr(marker, 'has_date') is sameas true
+                 and state_attr(marker, 'has_time') is sameas false }}
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.balkons_watering_pending_reference
+        else:
+          # Ambiguity: leave pending ON and disarm. Bounded OFF only; no ON retry.
+          - action: input_boolean.turn_off
+            continue_on_error: true
+            target:
+              entity_id: input_boolean.balkons_watering_arm_reference
+          - repeat:
+              sequence:
+                - action: mqtt.publish
+                  continue_on_error: true
+                  data:
+                    topic: balkons/sukna/komanda
+                    payload: "OFF"
+                    qos: 1
+                    retain: false
+                - wait_template: "{{ states(mailbox) == 'off:' ~ ticket and is_state(pump, 'off') }}"
+                  timeout: "00:00:05"
+                  continue_on_timeout: true
+              until:
+                - condition: template
+                  value_template: "{{ repeat.index >= 3 or wait.completed }}"
+          - stop: Uncertain bounded cycle; recovery required
+            error: true
+
+  balkons_watering_stop_reference:
+    alias: Balkons independent STOP reference (INHIBITED)
+    mode: parallel
+    max: 2
+    sequence:
+      - alias: Source release prohibited
+        condition: template
+        value_template: "{{ false }}"
+      # No wait behind the start script; leave pending latched if incomplete.
+      - action: input_boolean.turn_off
+        continue_on_error: true
+        target:
+          entity_id: input_boolean.balkons_watering_arm_reference
+      - action: script.turn_off
+        continue_on_error: true
+        target:
+          entity_id: script.balkons_watering_bounded_reference
+      - action: mqtt.publish
+        data:
+          topic: balkons/sukna/komanda
+          payload: "OFF"
+          qos: 1
+          retain: false
+
+automation:
+  - id: balkons_bounded_watering_schedule_reference
+    alias: Balkons 11:00 watering reference (INHIBITED)
+    initial_state: false
+    mode: single
+    triggers:
+      - trigger: time
+        at: "11:00:00"
+    conditions:
+      - condition: template
+        value_template: "{{ false }}"
+    actions:
+      - action: script.balkons_watering_bounded_reference

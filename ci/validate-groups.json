@@ -1080,6 +1080,10 @@
       ],
       [
         "python3",
+        "./tests/test-balkons-ha-bounded-reference.py"
+      ],
+      [
+        "python3",
         "./tests/test-balcony-watering-autumn-notify-only.py"
       ],
       [
