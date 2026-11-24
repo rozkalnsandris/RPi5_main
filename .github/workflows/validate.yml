@@ -39,6 +39,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Install balcony offline template test dependencies
+        if: matrix.group == 'balcony'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/balcony-test-venv"
+          "$RUNNER_TEMP/balcony-test-venv/bin/python" -m pip install --disable-pip-version-check Jinja2==3.1.6 MarkupSafe==3.0.3 PyYAML==6.0.3
+          echo "$RUNNER_TEMP/balcony-test-venv/bin" >> "$GITHUB_PATH"
+
       - name: Validate regression group
         run: python3 ./scripts/run-validation-group.py "${{ matrix.group }}"
 
