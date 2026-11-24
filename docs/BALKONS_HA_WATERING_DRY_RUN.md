@@ -28,3 +28,31 @@ Official HA references:
 - https://www.home-assistant.io/integrations/weather/
 - https://www.home-assistant.io/docs/templating/dates-and-times/
 - https://www.home-assistant.io/integrations/input_datetime/
+
+## Conservative one-time day-marker bootstrap (#1552)
+
+This is a source-only operator runbook, not permission to execute it. A previous confirmed-ON date and a date reserved before attempting ON have different meanings. The historical record is insufficient to establish the most recent attempt with certainty. Rather than invent a historical date, reserve the current Europe/Berlin calendar day as unavailable for a new attempt. This is deliberately conservative and is **not** evidence that watering occurred. It only blocks this HA preview for that day; it does not inhibit Hermes or any other controller.
+
+### Separately authorized operator procedure
+
+1. Before changing anything, verify the HA timezone is Europe/Berlin and record the current local date as D (ISO YYYY-MM-DD). Confirm the exact helper ID is absent from both the entity registry and states, including disabled entities; check for name/ID collisions and ensure there are no unexpected consumers or writers and no active HA watering controller. Verify the pump software state is OFF, without changing it. If any check is uncertain, stop.
+2. In Settings > Devices & services > Helpers, create one Date and/or time helper named `Balkons last watering attempt`, selecting Date only. Verify the resulting entity ID is exactly `input_datetime.balkons_last_watering_attempt`. Do not configure a fixed initial value: restoring state is necessary for future reservation semantics, whereas a fixed initial date can overwrite the restored value at startup. Creation is permitted only by separate explicit live approval.
+3. Before setting the date, confirm the local date is still D, the new helper has `has_date: true` and `has_time: false`, and its identity is unchanged. Use Developer tools > Actions once with the exact entity target and literal verified date D (replace the placeholder below; never use a historical or future date):
+
+   ```yaml
+   action: input_datetime.set_datetime
+   target:
+     entity_id: input_datetime.balkons_last_watering_attempt
+   data:
+     date: "YYYY-MM-DD"
+   ```
+
+4. Read back the helper through Developer tools > States without using Set state. Require the same ID, exact ISO state D, `has_date: true`, `has_time: false` and unchanged local date D. Record D and the verified result as a conservative bootstrap reservation, not a confirmed watering event. No schedule, automation, MQTT command, pump action, restart, or Hermes change is part of this procedure. On any failure, collision, unexpected consumer, or date rollover, stop; no retry, deletion, overwrite, or rollback without a separately approved recovery plan.
+
+### Acceptance and limits
+
+On the same date D, a separately authorized manual dry-run invocation with the pump software OFF and correct timezone should return `decision: block_already_attempted`, `dry_run: true`, `live_authorized: false`. Timezone and pump-state checks precede the day-marker check; forecast, sensor and frost decisions follow it. A missing response or an earlier block is not a successful bootstrap preview test. The preview must remain unchanged. Do not invoke an actual watering action to validate it.
+
+On later days, a past date removes only this particular preview block; it is not authorization to water. Before any cutover, independently establish an exclusive scheduler, common manual/automatic admission, a restart-safe pre-ON reservation and readback protocol, and the remaining safety prerequisites in the preceding section. Do not clear or backdate the reservation to force a preview or live run. A successful bootstrap neither authorizes activation nor proves a physical pump state.
+
+Official HA action reference: https://www.home-assistant.io/actions/input_datetime.set_datetime/
