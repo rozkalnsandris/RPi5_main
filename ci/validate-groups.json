@@ -1076,6 +1076,10 @@
       ],
       [
         "python3",
+        "./tests/test-balkons-ha-watering-dry-run.py"
+      ],
+      [
+        "python3",
         "./tests/test-balcony-watering-autumn-notify-only.py"
       ],
       [
