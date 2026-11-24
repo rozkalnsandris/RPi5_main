@@ -163,14 +163,14 @@ script:
               {{ not is_state(arm, 'on') or not is_state(pending, 'on')
                  or (states(mailbox) == 'off:' ~ ticket and is_state(pump, 'off')) }}
             timeout:
-              seconds: "{{ [0, 45 - (as_timestamp(now()) - request_at)] | max }}"
+              seconds: "{{ [0, [45, 45 - (as_timestamp(now()) - dispatch_at)] | min] | max }}"
             continue_on_timeout: true
           - variables:
               off_seen: >-
                 {{ wait.completed and states(mailbox) == 'off:' ~ ticket
                    and is_state(pump, 'off') and is_state(arm, 'on')
                    and is_state(pending, 'on')
-                   and 0 <= as_timestamp(now()) - request_at <= 45 }}
+                   and 0 <= as_timestamp(now()) - dispatch_at <= 45 }}
       - if:
           - condition: template
             value_template: >-
