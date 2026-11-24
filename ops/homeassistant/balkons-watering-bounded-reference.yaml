@@ -117,7 +117,7 @@ script:
       - alias: Evaluate only the ten fresh device sample codes
         condition: template
         value_template: >-
-          {% set codes = offer[90:100] %}
+          {%- set codes = offer[90:100] -%}
           {{ codes | length == 10 and codes | regex_match('^[DWMU]{10}$')
              and codes.count('M') == 0 and codes.count('U') <= 2
              and codes.count('D') >= 2 and codes.count('W') + codes.count('U') < 8 }}
