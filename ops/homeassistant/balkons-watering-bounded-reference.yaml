@@ -45,10 +45,10 @@ script:
           off_seen: false
       - variables:
           snapshot: >-
-            {% set ns = namespace(values=[]) %}
-            {% for i in sensor_ids %}
-              {% set ns.values = ns.values + [states('sensor.balkona_laistisana_puke_' ~ i)] %}
-            {% endfor %}
+            {%- set ns = namespace(values=[]) -%}
+            {%- for i in sensor_ids -%}
+              {%- set ns.values = ns.values + [states('sensor.balkona_laistisana_puke_' ~ i)] -%}
+            {%- endfor -%}
             {{ ns.values + [states('weather.forecast_home'),
                             state_attr('weather.forecast_home', 'temperature'),
                             state_attr('weather.forecast_home', 'temperature_unit')] }}
@@ -120,10 +120,10 @@ script:
       - alias: Recheck snapshot, marker, clock, admission and exact frozen offer
         condition: template
         value_template: >-
-          {% set ns = namespace(values=[]) %}
-          {% for i in sensor_ids %}
-            {% set ns.values = ns.values + [states('sensor.balkona_laistisana_puke_' ~ i)] %}
-          {% endfor %}
+          {%- set ns = namespace(values=[]) -%}
+          {%- for i in sensor_ids -%}
+            {%- set ns.values = ns.values + [states('sensor.balkona_laistisana_puke_' ~ i)] -%}
+          {%- endfor -%}
           {% set current = ns.values + [states('weather.forecast_home'),
                                        state_attr('weather.forecast_home', 'temperature'),
                                        state_attr('weather.forecast_home', 'temperature_unit')] %}
