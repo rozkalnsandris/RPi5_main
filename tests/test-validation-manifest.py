@@ -34,7 +34,7 @@ for group in EXPECTED_GROUPS:
         assert "-c" not in argv
         commands.append(tuple(argv))
 
-assert len(commands) == 325
+assert len(commands) == 326
 assert len(set(commands)) == len(commands)
 
 for argv in commands:
@@ -57,6 +57,7 @@ assert "python3 ./scripts/require-validation-results.py" in workflow
 all_text = "\n".join(" ".join(argv) for argv in commands)
 for required in (
     "./tests/test-balkons-ha-watering-dry-run.py",
+    "./tests/test-balkons-ha-bounded-reference.py",
     "./tests/test-dashboard-issue226-trusted-read-bridge.sh",
     "./tests/test-cloudflare-p1d04-prelive-prep.py",
     "./tests/test-browser-lifecycle.py",
