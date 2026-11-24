@@ -40,10 +40,13 @@ script:
           mailbox: sensor.balkons_ha45_reply_reference
           day: "{{ now().date().isoformat() }}"
           old_date: "{{ states(marker) }}"
-          expected_revision: '76e4f83f9849ea6e63a1670e4f031c6737d6916a'
+          expected_revision: '65309e8902c31f561e4a20bbc2c415544cfd6933'
           on_seen: false
           off_seen: false
       - variables:
+          arm_generation: >-
+            {{ 'arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()
+               if is_state(arm, 'on') else '' }}
           snapshot: >-
             {{ [states('weather.forecast_home'),
                  state_attr('weather.forecast_home', 'temperature'),
@@ -71,13 +74,20 @@ script:
              and now().date().isoformat() == day and states(marker) == old_date
              and old_date < day and state_attr(marker, 'has_date') is sameas true
              and state_attr(marker, 'has_time') is sameas false
-             and is_state(pump, 'off') and is_state(arm, 'on') and is_state(pending, 'off') }}
+             and is_state(pump, 'off') and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) and is_state(pending, 'off') }}
       # Latch before any protocol dispatch. Any abort leaves it blocked.
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.balkons_watering_pending_reference
+      - variables:
+          pending_generation: >-
+            {{ 'pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()
+               if is_state(pending, 'on') else '' }}
       - condition: template
-        value_template: "{{ is_state(pending, 'on') and is_state(arm, 'on') and is_state(pump, 'off') }}"
+        value_template: >-
+          {{ (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation)
+             and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation)
+             and is_state(pump, 'off') }}
       - variables:
           # Correlation only, not authentication. Runtime uniqueness still requires proof.
           # Prefix preserves opaque hex even when it looks like a number.
@@ -90,7 +100,7 @@ script:
           {{ request_payload | length == 25
              and request_payload | regex_match('^ticket45:[0-9a-f]{16}$')
              and not states(mailbox).startswith('offer2:' ~ request_payload[9:] ~ ':')
-             and is_state(arm, 'on') and is_state(pending, 'on') and is_state(pump, 'off') }}
+             and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) and (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation) and is_state(pump, 'off') }}
       - action: mqtt.publish
         data:
           topic: balkons/sukna/komanda
@@ -99,20 +109,28 @@ script:
           retain: false
       # The MQTT sensor listener must already be subscribed before ticket dispatch.
       - wait_template: >-
-          {% set reply = states(mailbox) %}
-          {{ not is_state(arm, 'on') or not is_state(pending, 'on')
+          {%- set reply = states(mailbox) -%}
+          {{ not (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) or not (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation)
              or reply.startswith('offer2:' ~ request_payload[9:] ~ ':') }}
         timeout: "00:00:05"
         continue_on_timeout: false
       - variables:
-          offer: "{{ states(mailbox) }}"
+          offer_record: >-
+            {%- set reply = states[mailbox] -%}
+            {{ {'payload': reply.state, 'updated': as_timestamp(reply.last_updated)}
+               if reply is not none else {'payload': '', 'updated': 0} }}
+      - variables:
+          offer: "{{ offer_record.payload }}"
+          offer_updated: "{{ offer_record.updated }}"
       - condition: template
         value_template: >-
-          {{ wait.completed and is_state(arm, 'on') and is_state(pending, 'on')
+          {{ wait.completed and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) and (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation)
              and offer | length == 104
              and offer[:24] == 'offer2:' ~ request_payload[9:] ~ ':'
              and offer[24:] | regex_match('^[0-9a-f]{24}:[0-9a-f]{40}:[DWMU]{10}:off$')
              and offer[49:89] == expected_revision
+             and request_at < offer_updated <= as_timestamp(now())
+             and offer_updated - request_at <= 5
              and 0 <= as_timestamp(now()) - request_at < 8 }}
       - alias: Evaluate only the ten fresh device sample codes
         condition: template
@@ -130,12 +148,17 @@ script:
           {{ now().tzinfo | string == 'Europe/Berlin' and now().date().isoformat() == day
              and states(marker) == old_date and state_attr(marker, 'has_date') is sameas true
              and state_attr(marker, 'has_time') is sameas false and is_state(pump, 'off')
-             and is_state(arm, 'on') and is_state(pending, 'on') and states(mailbox) == offer }}
+             and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) and (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation) and (states(mailbox) == offer and as_timestamp(states[mailbox].last_updated) == offer_updated) }}
       - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.balkons_last_watering_attempt
         data:
           date: "{{ day }}"
+      - alias: No start until separate source release proves freshness and cancellation
+        condition: template
+        value_template: "{{ false }}"
+      - variables:
+          dispatch_at: "{{ as_timestamp(now()) }}"
       - alias: Recheck snapshot, marker, clock, admission and exact frozen offer
         condition: template
         value_template: >-
@@ -146,13 +169,8 @@ script:
              and now().date().isoformat() == day and states(marker) == day
              and state_attr(marker, 'has_date') is sameas true
              and state_attr(marker, 'has_time') is sameas false and is_state(pump, 'off')
-             and is_state(arm, 'on') and is_state(pending, 'on') and states(mailbox) == offer
+             and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) and (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation) and (states(mailbox) == offer and as_timestamp(states[mailbox].last_updated) == offer_updated)
              and 0 <= as_timestamp(now()) - request_at < 8 }}
-      - alias: No start until separate source release proves freshness and cancellation
-        condition: template
-        value_template: "{{ false }}"
-      - variables:
-          dispatch_at: "{{ as_timestamp(now()) }}"
       - action: mqtt.publish
         continue_on_error: true
         data:
@@ -161,21 +179,22 @@ script:
           qos: 1
           retain: false
       - wait_template: >-
-          {{ not is_state(arm, 'on') or not is_state(pending, 'on')
+          {{ not (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) or not (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation)
              or states(mailbox) == on_ack or states(mailbox) == off_ack }}
         timeout: "00:00:05"
         continue_on_timeout: true
       - variables:
           on_seen: >-
             {{ wait.completed and states(mailbox) == on_ack
-               and is_state(arm, 'on') and is_state(pending, 'on')
+               and dispatch_at < as_timestamp(states[mailbox].last_updated) <= as_timestamp(now())
+               and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) and (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation)
                and 0 <= as_timestamp(now()) - dispatch_at <= 5 }}
       - if:
           - condition: template
             value_template: "{{ on_seen }}"
         then:
           - wait_template: >-
-              {{ not is_state(arm, 'on') or not is_state(pending, 'on')
+              {{ not (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) or not (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation)
                  or (states(mailbox) == off_ack and is_state(pump, 'off')) }}
             timeout:
               seconds: "{{ [0, [45, 45 - (as_timestamp(now()) - dispatch_at)] | min] | max }}"
@@ -183,14 +202,16 @@ script:
           - variables:
               off_seen: >-
                 {{ wait.completed and states(mailbox) == off_ack
-                   and is_state(pump, 'off') and is_state(arm, 'on')
-                   and is_state(pending, 'on')
+                   and dispatch_at < as_timestamp(states[mailbox].last_updated) <= as_timestamp(now())
+                   and is_state(pump, 'off') and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation)
+                   and (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation)
                    and 0 <= as_timestamp(now()) - dispatch_at <= 45 }}
       - if:
           - condition: template
             value_template: >-
-              {{ on_seen and off_seen and is_state(arm, 'on') and is_state(pending, 'on')
+              {{ on_seen and off_seen and (is_state(arm, 'on') and ('arm:' ~ states[arm].context.id ~ ':' ~ states[arm].last_changed.isoformat()) == arm_generation) and (is_state(pending, 'on') and ('pending:' ~ states[pending].context.id ~ ':' ~ states[pending].last_changed.isoformat()) == pending_generation)
                  and is_state(pump, 'off') and states(mailbox) == off_ack
+                 and dispatch_at < as_timestamp(states[mailbox].last_updated) <= as_timestamp(now())
                  and now().tzinfo | string == 'Europe/Berlin'
                  and now().date().isoformat() == day and states(marker) == day
                  and state_attr(marker, 'has_date') is sameas true
@@ -214,7 +235,9 @@ script:
                     payload: "OFF"
                     qos: 1
                     retain: false
-                - wait_template: "{{ states(mailbox) == off_ack and is_state(pump, 'off') }}"
+                - wait_template: >-
+                    {{ states(mailbox) == off_ack and is_state(pump, 'off')
+                       and dispatch_at < as_timestamp(states[mailbox].last_updated) <= as_timestamp(now()) }}
                   timeout: "00:00:05"
                   continue_on_timeout: true
               until:
@@ -231,7 +254,7 @@ script:
       - alias: Source release prohibited
         condition: template
         value_template: "{{ false }}"
-      # No wait behind the start script; leave pending latched if incomplete.
+      # Disarm and cancel before OFF; latch recovery even if no attempt ran.
       - action: input_boolean.turn_off
         continue_on_error: true
         target:
@@ -240,12 +263,25 @@ script:
         continue_on_error: true
         target:
           entity_id: script.balkons_watering_bounded_reference
+      - action: input_boolean.turn_on
+        continue_on_error: true
+        target:
+          entity_id: input_boolean.balkons_watering_pending_reference
       - action: mqtt.publish
         data:
           topic: balkons/sukna/komanda
           payload: "OFF"
           qos: 1
           retain: false
+      - if:
+          - condition: template
+            value_template: >-
+              {{ not (is_state('input_boolean.balkons_watering_arm_reference', 'off')
+                      and is_state('input_boolean.balkons_watering_pending_reference', 'on')
+                      and is_state('script.balkons_watering_bounded_reference', 'off')) }}
+        then:
+          - stop: STOP local cancellation readback uncertain; recovery required
+            error: true
 
 automation:
   - id: balkons_bounded_watering_schedule_reference

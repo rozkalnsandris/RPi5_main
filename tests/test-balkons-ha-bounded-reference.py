@@ -27,7 +27,7 @@ TZ = ZoneInfo('Europe/Berlin')
 SENSORS = [1, 3, 4, 5, 6, 7, 8, 9, 10, 12]
 RID = '0123456789abcdef'
 TICKET = '0123456789abcdef00000001'
-REVISION = '76e4f83f9849ea6e63a1670e4f031c6737d6916a'
+REVISION = '65309e8902c31f561e4a20bbc2c415544cfd6933'
 REQUEST = f'ticket45:{RID}'
 OFFER = f'offer2:{RID}:{TICKET}:{REVISION}:DDDWWWWWWU:off'
 GUARD = {'condition': 'template', 'value_template': '{{ false }}'}
@@ -47,6 +47,26 @@ def guarded(step):
     return {k: v for k, v in step.items() if k != 'alias'} == GUARD
 
 
+class StateView:
+    """Minimal HA state-object and callable interface for offline rendering."""
+    def __init__(self, values, changed, updated, contexts):
+        self.values = values
+        self.changed = changed
+        self.updated = updated
+        self.contexts = contexts
+
+    def __call__(self, key):
+        return self.values.get(key, 'unknown')
+
+    def __getitem__(self, key):
+        if key not in self.values:
+            return None
+        return SimpleNamespace(state=self.values[key],
+                               last_changed=self.changed[key],
+                               last_updated=self.updated[key],
+                               context=SimpleNamespace(id=self.contexts[key]))
+
+
 class Reference(unittest.TestCase):
     def setUp(self):
         self.package = yaml.safe_load(SOURCE.read_text(encoding='utf-8'))
@@ -59,12 +79,15 @@ class Reference(unittest.TestCase):
                             for i in SENSORS})
         self.attrs = {MARKER: {'has_date': True, 'has_time': False},
                       WEATHER: {'temperature': 8, 'temperature_unit': '°C'}}
+        self.changed = {key: self.clock - timedelta(seconds=2) for key in self.states}
+        self.updated = {key: self.clock - timedelta(milliseconds=500) for key in self.states}
+        self.contexts = {key: 'initial-context' for key in self.states}
         self.env = NativeEnvironment(undefined=StrictUndefined)
         self.env.filters['regex_match'] = lambda value, pattern: re.match(pattern, value) is not None
         self.env.globals.update(
             now=lambda: self.clock, as_timestamp=lambda dt: dt.timestamp(),
             is_number=lambda v: isinstance(v, (int, float)) and math.isfinite(v),
-            states=lambda key: self.states.get(key, 'unknown'),
+            states=StateView(self.states, self.changed, self.updated, self.contexts),
             state_attr=lambda key, attr: self.attrs.get(key, {}).get(attr),
             is_state=lambda key, value: self.states.get(key, 'unknown') == value)
         self.v = dict(marker=MARKER, pump=PUMP, arm=ARM, pending=PENDING, mailbox=MAIL,
@@ -72,11 +95,15 @@ class Reference(unittest.TestCase):
                       request_payload=REQUEST, expected_revision=REVISION, offer=OFFER,
                       start_payload='start45:' + TICKET, on_ack='on:' + TICKET,
                       off_ack='off:' + TICKET,
-                      request_at=self.clock.timestamp(), dispatch_at=self.clock.timestamp(),
+                      request_at=self.clock.timestamp() - 1, dispatch_at=self.clock.timestamp() - 1,
+                      offer_updated=self.updated[MAIL].timestamp(),
                       wait=SimpleNamespace(completed=True), on_seen=True, off_seen=True)
         snap = next(s['variables']['snapshot'] for s in self.seq
                     if 'snapshot' in s.get('variables', {}))
         self.v['snapshot'] = self.render(snap)
+        for name in ('arm_generation', 'pending_generation'):
+            template = next(s['variables'][name] for s in self.seq if name in s.get('variables', {}))
+            self.v[name] = self.render(template)
 
     def render(self, template, **changes):
         return self.env.from_string(template).render(**(self.v | changes))
@@ -88,6 +115,8 @@ class Reference(unittest.TestCase):
         self.assertTrue(guarded(self.seq[0]))
         self.assertTrue(guarded(self.stop[0]))
         self.assertEqual(sum(guarded(s) for s in self.seq), 3)
+        self.assertEqual(next(s['variables']['expected_revision'] for s in self.seq
+                              if 'expected_revision' in s.get('variables', {})), REVISION)
         for s in self.seq:
             if guarded(s):
                 self.assertIs(self.render(s['value_template']), False)
@@ -114,7 +143,7 @@ class Reference(unittest.TestCase):
             self.assertEqual(p['qos'], 1)
             self.assertIs(p['retain'], False)
         self.assertEqual([x['target']['entity_id'] for x in all_actions
-                          if x['action'] == 'input_boolean.turn_on'], [PENDING])
+                          if x['action'] == 'input_boolean.turn_on'], [PENDING, PENDING])
         self.assertEqual([x['target']['entity_id'] for x in all_actions
                           if x['action'] == 'input_datetime.set_datetime'], [MARKER])
         actions = [s.get('action') for s in self.seq]
@@ -122,8 +151,17 @@ class Reference(unittest.TestCase):
         self.assertLess(actions.index('input_boolean.turn_on'), actions.index('mqtt.publish'))
         self.assertLess(actions.index('input_datetime.set_datetime'),
                         max(i for i, s in enumerate(self.seq) if s.get('action') == 'mqtt.publish'))
-        self.assertEqual([s.get('action') for s in self.stop[1:]],
-                         ['input_boolean.turn_off', 'script.turn_off', 'mqtt.publish'])
+        self.assertEqual([s.get('action') for s in self.stop[1:5]],
+                         ['input_boolean.turn_off', 'script.turn_off',
+                          'input_boolean.turn_on', 'mqtt.publish'])
+        self.assertEqual(self.stop[3]['target']['entity_id'], PENDING)
+        self.assertTrue(all(s['continue_on_error'] for s in self.stop[1:4]))
+        self.assertEqual(self.stop[4]['data']['payload'], 'OFF')
+        self.assertEqual(len(self.stop), 6)
+        self.assertIs(self.stop[5]['then'][0]['error'], True)
+        dispatch = max(i for i, s in enumerate(self.seq) if s.get('action') == 'mqtt.publish')
+        self.assertTrue(self.seq[dispatch - 1]['alias'].startswith('Recheck snapshot'))
+        self.assertIn('dispatch_at', self.seq[dispatch - 2]['variables'])
         repeat = [n['repeat'] for n in nodes(self.seq) if 'repeat' in n]
         self.assertEqual(len(repeat), 1)
         self.assertEqual(repeat[0]['sequence'][0]['data']['payload'], 'OFF')
@@ -164,7 +202,7 @@ class Reference(unittest.TestCase):
         self.assertIs(self.render(pred, wait=SimpleNamespace(completed=False)), False)
         self.clock += timedelta(seconds=8)
         self.assertIs(self.render(pred), False)
-        self.clock -= timedelta(seconds=9)
+        self.clock -= timedelta(seconds=10)
         self.assertIs(self.render(pred), False)
 
     def test_pre_dispatch_requires_readback_and_unchanged_inputs(self):
@@ -212,6 +250,49 @@ class Reference(unittest.TestCase):
         self.states[MAIL] = 'unknown'
         self.assertIs(self.render(guard), True)
 
+    def test_generation_cancellation_at_checked_boundaries(self):
+        gates = [n['value_template'] for n in nodes(self.seq)
+                 if 'arm_generation' in n.get('value_template', '')
+                 and 'pending_generation' in n.get('value_template', '')]
+        self.assertGreaterEqual(len(gates), 5)
+        waits = [n['wait_template'] for n in nodes(self.seq)
+                 if 'arm_generation' in n.get('wait_template', '')]
+        self.assertEqual(len(waits), 3)
+        for key in (ARM, PENDING):
+            # OFF then ON is not the original generation, despite the same value.
+            original = self.changed[key]
+            self.changed[key] += timedelta(milliseconds=1)
+            for gate in gates:
+                self.assertIs(self.render(gate), False, gate)
+            for wait in waits:
+                self.assertIs(self.render(wait), True, wait)
+            self.changed[key] = original
+            original_context = self.contexts[key]
+            self.contexts[key] = 'different-context'
+            for gate in gates:
+                self.assertIs(self.render(gate), False, gate)
+            self.contexts[key] = original_context
+
+    def test_offer_record_requires_post_request_update_and_no_rewrite(self):
+        record = next(s['variables']['offer_record'] for s in self.seq
+                      if 'offer_record' in s.get('variables', {}))
+        self.assertEqual(self.render(record),
+                         {'payload': OFFER, 'updated': self.v['offer_updated']})
+        accept = next(s['value_template'] for s in self.seq
+                      if 'offer | length' in s.get('value_template', ''))
+        dispatch = next(s['value_template'] for s in self.seq
+                        if s.get('alias', '').startswith('Recheck snapshot'))
+        self.assertIs(self.render(accept), True)
+        for timestamp in (self.v['request_at'] - 1, self.v['request_at'],
+                          self.clock.timestamp() + 1, self.v['request_at'] + 6):
+            self.assertIs(self.render(accept, offer_updated=timestamp), False)
+        self.assertIs(self.render(dispatch), True)
+        self.updated[MAIL] += timedelta(milliseconds=100)
+        self.assertIs(self.render(dispatch), False)  # same payload, new event
+        self.states.pop(MAIL)
+        self.assertEqual(self.render(record), {'payload': '', 'updated': 0})
+        self.assertIs(self.render(dispatch), False)
+
     def test_ack_correlation_and_deadline(self):
         on = next(s['variables']['on_seen'] for s in self.seq
                   if isinstance(s.get('variables', {}).get('on_seen'), str))
@@ -219,6 +300,10 @@ class Reference(unittest.TestCase):
                    if isinstance(n.get('variables', {}).get('off_seen'), str))
         self.states[MAIL] = 'on:' + TICKET
         self.assertIs(self.render(on), True)
+        updated = self.updated[MAIL]
+        self.updated[MAIL] = self.clock - timedelta(seconds=2)
+        self.assertIs(self.render(on), False)
+        self.updated[MAIL] = updated
         self.states[MAIL] = 'on:' + TICKET[:-1] + '2'
         self.assertIs(self.render(on), False)
         self.states[MAIL] = 'on:' + TICKET
@@ -226,6 +311,9 @@ class Reference(unittest.TestCase):
         self.assertIs(self.render(on), False)
         self.states[MAIL] = 'off:' + TICKET
         self.assertIs(self.render(off), True)
+        self.updated[MAIL] = self.clock - timedelta(seconds=10)
+        self.assertIs(self.render(off), False)
+        self.updated[MAIL] = updated
         self.states[PUMP] = 'on'
         self.assertIs(self.render(off), False)
         self.states[PUMP] = 'off'
