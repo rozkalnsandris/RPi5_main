@@ -1223,6 +1223,10 @@
         "./tests/test-backup-ownership.sh"
       ],
       [
+        "python3",
+        "./tests/test-jobscanner-nightly-backup.py"
+      ],
+      [
         "bash",
         "./tests/test-tmp-headroom-monitor.sh"
       ],
