@@ -1,0 +1,119 @@
+# Job Scanner: only the active SQLite DB, never the user directory or credentials.
+readonly JOBSCANNER_DB=__PRIVATE_DB_PATH__
+# The shell opens the destination inside its private root-owned staging tree.
+# Python drops root before following any application-controlled pathname.
+jobscanner_snapshot() {
+    local dst="$PAYLOAD$JOBSCANNER_DB"
+    mkdir -p -- "$(dirname "$dst")"
+    (
+        set -o noclobber
+        env -i PATH=/usr/bin:/bin /usr/bin/timeout 90s /usr/bin/python3 -I -B - "$JOBSCANNER_DB" <<'JOBSCANNER_PY' > "$dst"
+import os
+import sqlite3
+import stat
+import sys
+import time
+from contextlib import closing
+from pathlib import Path
+
+MAX_BYTES = 16 * 1024 * 1024
+REQUIRED = {
+    "jobs": {"id", "dedupe_key", "source", "profile_id", "review_state",
+             "review_updated_at", "salary_note", "source_page_url"},
+    "runs": {"id", "profile_id", "started_at", "finished_at"},
+    "ui_preferences": {"key", "payload"},
+    "stellenonline_budget": {"day", "attempts"},
+}
+
+
+def check_path(path, uid, gid):
+    if not path.is_absolute() or path.resolve(strict=True) != path:
+        raise ValueError("unsafe source path")
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != uid
+            or info.st_gid != gid or stat.S_IMODE(info.st_mode) != 0o600):
+        raise ValueError("unsafe source metadata")
+    for suffix in ("-wal", "-shm", "-journal"):
+        sidecar = Path(str(path) + suffix)
+        try:
+            info = sidecar.lstat()
+        except FileNotFoundError:
+            continue
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != uid
+                or info.st_gid != gid or info.st_mode & 0o077):
+            raise ValueError("unsafe SQLite sidecar")
+
+
+def validate(db):
+    db.execute("PRAGMA trusted_schema=OFF")
+    tables = {row[0] for row in db.execute(
+        "SELECT name FROM sqlite_schema WHERE type='table'")}
+    for table, columns in REQUIRED.items():
+        if table not in tables or not columns <= {
+                row[1] for row in db.execute("PRAGMA table_info(" + table + ")")}:
+            raise ValueError("missing Job Scanner schema")
+    if db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+        raise ValueError("integrity failure")
+
+
+def snapshot(path, uid, gid):
+    check_path(path, uid, gid)
+    deadline = time.monotonic() + 60
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro",
+                                 uri=True, timeout=5)) as source:
+        source.execute("PRAGMA query_only=ON")
+        source.execute("PRAGMA trusted_schema=OFF")
+        source.execute("BEGIN")
+        page_size = source.execute("PRAGMA page_size").fetchone()[0]
+        if source.execute("PRAGMA page_count").fetchone()[0] * page_size > MAX_BYTES:
+            raise ValueError("snapshot too large")
+
+        def progress(status, remaining, total):
+            if time.monotonic() > deadline or total * page_size > MAX_BYTES:
+                raise ValueError("snapshot bound exceeded")
+
+        with closing(sqlite3.connect(":memory:")) as target:
+            target.execute("PRAGMA temp_store=MEMORY")
+            source.backup(target, pages=256, progress=progress, sleep=0.05)
+            validate(target)
+            data = target.serialize()
+            # WAL-mode backup header is not a standalone memory database.
+            # VACUUM the memory copy only to produce a rollback-journal image.
+            if data[18:20] == b"\x02\x02":
+                target.execute("VACUUM")
+                data = target.serialize()
+            if not 0 < len(data) <= MAX_BYTES or data[18:20] != b"\x01\x01":
+                raise ValueError("invalid standalone snapshot")
+    with closing(sqlite3.connect(":memory:")) as restored:
+        restored.deserialize(data)
+        validate(restored)
+    check_path(path, uid, gid)
+    return data
+
+
+if __name__ == "__main__":
+    try:
+        if os.geteuid() != 0:
+            raise ValueError("root launcher required")
+        os.setgroups([])
+        os.setgid(1000)
+        os.setuid(1000)
+        if os.getuid() != 1000 or os.geteuid() != 1000 or os.getgid() != 1000:
+            raise ValueError("privilege drop failed")
+        data = snapshot(Path(sys.argv[1]),
+                        1000, 1000)
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
+    except Exception:
+        # No listing contents, database errors or paths from untrusted input.
+        print("Job Scanner SQLite snapshot failed", file=sys.stderr)
+        raise SystemExit(1)
+JOBSCANNER_PY
+    )
+    [[ -s "$dst" ]]
+    chmod 600 "$dst"
+    log "Job Scanner SQLite snapshot OK"
+}
+
+jobscanner_snapshot
+

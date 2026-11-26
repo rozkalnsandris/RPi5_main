@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the exact embedded successor snapshot with synthetic SQLite only."""
 import os
+import runpy
 import sqlite3
 import subprocess
 import tempfile
@@ -10,8 +11,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "ops/bin/rpi5-backup"
-CORE = ROOT / "ops/bin/rpi5-backup-v13-jobscanner"
-SOURCE = CORE.read_text(encoding="utf-8")
+GENERATOR = runpy.run_path(str(ROOT / "scripts/render-jobscanner-backup.py"))
+TEMPLATE = (ROOT / "ops/backup/jobscanner-snapshot.sh.in").read_text(encoding="utf-8")
+PRIVATE_FIXTURE = "/srv/fixture/jobscanner/data/jobs.db"
+SOURCE = GENERATOR["render"](BASE.read_bytes(), TEMPLATE, PRIVATE_FIXTURE).decode("utf-8")
 CODE = SOURCE.split("<<'JOBSCANNER_PY' > \"$dst\"\n", 1)[1].split("\nJOBSCANNER_PY\n", 1)[0]
 NAMESPACE = {"__name__": "snapshot_test"}
 exec(compile(CODE, "embedded_snapshot", "exec"), NAMESPACE)
@@ -107,17 +110,25 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             snapshot(self.path, self.uid, self.gid)
 
+    def test_materializer_rejects_wrong_base_and_unsafe_binding(self):
+        with self.assertRaises(ValueError):
+            GENERATOR["render"](b"wrong", TEMPLATE, PRIVATE_FIXTURE)
+        for path in ("relative/data/jobs.db", "/srv/../data/jobs.db", "/srv/fixture/data/other.db", "/srv/a b/data/jobs.db"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                GENERATOR["render"](BASE.read_bytes(), TEMPLATE, path)
+
     def test_exact_successor_delta(self):
-        subprocess.run(["bash", "-n", str(CORE)], check=True)
+        subprocess.run(["bash", "-n"], input=SOURCE, text=True, check=True)
         start = SOURCE.index("# Job Scanner: only the active SQLite DB")
         end = SOURCE.index('mkdir -p "$PAYLOAD/backup-metadata"', start)
         original = SOURCE[:start] + SOURCE[end:]
         original = original.replace("V13 (Job Scanner).", "V12.", 1)
         original = original.replace("backup_version=13", "backup_version=12", 1)
-        member = "    './home/andris/jobscanner-job-rozkalns-net/data/jobs.db' \\\n"
+        member = GENERATOR["MEMBER"]
         self.assertEqual(original.count(member), 1)
         original = original.replace(member, "", 1)
         self.assertEqual(original, BASE.read_text(encoding="utf-8"))
+        self.assertIn("readonly JOBSCANNER_DB=" + PRIVATE_FIXTURE, SOURCE)
         self.assertIn("os.setuid(1000)", CODE)
         self.assertIn("source.backup(target", CODE)
         self.assertLess(SOURCE.index("\njobscanner_snapshot\n"), SOURCE.index("tar --numeric-owner"))
